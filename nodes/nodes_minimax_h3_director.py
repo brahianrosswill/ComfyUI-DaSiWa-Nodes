@@ -35,7 +35,11 @@ class MiniMaxH3Director:
                 "timeline_data": ("STRING", {"default": "{\"version\":1,\"items\":[],\"prompt_blocks\":[]}", "multiline": False, "hidden": True}),
                 "builder_state": ("STRING", {"default": "", "multiline": False, "hidden": True}),
             },
-            "optional": {"fl2va_model": ("MODEL", {"lazy": True}), "ref2va_model": ("MODEL", {"lazy": True})},
+            "optional": {
+                "fl2va_model": ("MODEL", {"lazy": True}),
+                "ref2va_model": ("MODEL", {"lazy": True}),
+                "external_prompt": ("STRING", {"default": "", "multiline": True, "forceInput": True}),
+            },
         }
 
     RETURN_TYPES = ("MINIMAX_H3_DIRECTOR_GUIDE", "INT", "STRING", "INT", "INT", "MODEL", "BOOLEAN", "BOOLEAN")
@@ -44,13 +48,13 @@ class MiniMaxH3Director:
     CATEGORY = "DaSiWa Nodes/MiniMax H3"
 
     def check_lazy_status(self, mode, prompt, width, height, duration, ref_image_size, timeline_data, builder_state,
-                          fl2va_model=None, ref2va_model=None):
+                          fl2va_model=None, ref2va_model=None, external_prompt=None):
         selected_name = "ref2va_model" if mode == "REF2VA" else "fl2va_model"
         selected_model = ref2va_model if mode == "REF2VA" else fl2va_model
         return [selected_name] if selected_model is None else []
 
     def build_guide(self, mode, prompt, width, height, duration, ref_image_size, timeline_data, builder_state="",
-                    fl2va_model=None, ref2va_model=None):
+                    fl2va_model=None, ref2va_model=None, external_prompt=None):
         # Preserve direct Python callers that used the pre-builder positional model argument.
         if builder_state is not None and not isinstance(builder_state, str):
             if fl2va_model is None:
@@ -154,9 +158,12 @@ class MiniMaxH3Director:
             validate_reference_limits(images=images, videos=videos, audios=audios)
 
         blocks = state.get("prompt_blocks", [])
-        resolved = build_prompt(merged)
-        if not any(str(merged.get(key) or "").strip() for key in ("imd", "soundscape")) and mode != "REF2VA":
-            resolved = assemble_prompt(prompt, blocks)
+        if isinstance(external_prompt, str):
+            resolved = external_prompt
+        else:
+            resolved = build_prompt(merged)
+            if not any(str(merged.get(key) or "").strip() for key in ("imd", "soundscape")) and mode != "REF2VA":
+                resolved = assemble_prompt(prompt, blocks)
         for issue in validate_builder_state(merged):
             log_dasiwa("MiniMax H3 Director", f"[{issue['level'].upper()}] {issue['msg']}")
         guide = {

@@ -31,7 +31,7 @@ function installStyles() {
   style.textContent += `.ds-h3-preview-overlay{position:fixed;inset:0;z-index:10001;display:flex;align-items:center;justify-content:center;background:rgba(8,10,14,.6)}.ds-h3-preview-panel{width:min(600px,90vw);max-height:85vh;display:flex;flex-direction:column;background:#111820;border:1px solid #40515e;border-radius:10px;overflow:hidden;box-shadow:0 8px 32px #000}.ds-h3-preview-header,.ds-h3-preview-meta{padding:8px 12px;background:#0d1217;color:#dbe7f0}.ds-h3-preview-header{display:flex;justify-content:space-between;border-bottom:1px solid #344452}.ds-h3-preview-body{padding:12px;background:#090d11;display:flex;justify-content:center}.ds-h3-preview-media{max-width:100%;max-height:40vh;object-fit:contain}.ds-h3-preview-controls{padding:8px 12px;background:#0d1217;display:flex;flex-direction:column;gap:6px}.ds-h3-preview-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;color:#9fb3c2}.ds-h3-preview-row input[type="number"]{width:60px;padding:2px 4px;background:#111a21;color:#dbe7f0;border:1px solid #40515e;border-radius:3px}.ds-h3-preview-row input[type="text"],.ds-h3-preview-row textarea{flex:1;min-width:150px;padding:3px 5px;background:#111a21;color:#dbe7f0;border:1px solid #40515e;border-radius:3px;font-size:11px}.ds-h3-preview-row textarea{resize:vertical;min-height:30px}.ds-h3-preview-meta{font-size:11px;color:#9fb3c2;border-top:1px solid #344452}`;
   style.textContent += `
     .ds-h3-docs{font-weight:700;min-width:26px;padding:4px 8px!important}.ds-h3-ruler{display:none}.ds-h3-clip.video{width:var(--clip-width)!important;min-width:180px!important}.ds-h3-clip-identity{position:absolute;left:5px;top:4px;z-index:5;padding:1px 4px;border-radius:3px;background:rgba(0,0,0,.65);color:#fff;font-size:10px;font-weight:700;pointer-events:none}.ds-h3-video-scale{position:absolute;left:12px;right:12px;top:27px;height:44px;pointer-events:none;opacity:.8;background:repeating-linear-gradient(90deg,rgba(216,174,245,.82) 0,rgba(216,174,245,.82) 1px,transparent 1px,transparent 12px),linear-gradient(transparent 48%,rgba(216,174,245,.7) 49%,rgba(216,174,245,.7) 52%,transparent 53%)}.ds-h3-prompt-panel{min-height:120px;overflow:visible}.ds-h3-prompt-field{position:relative;flex:none;min-height:90px}.ds-h3-prompt-panel .ds-h3-prompt-field>.ds-h3-prompt{height:100%;min-height:0;padding-bottom:16px;resize:none}.ds-h3-prompt-field-resizer{position:absolute;bottom:0;left:0;width:100%;height:12px;cursor:ns-resize;display:flex;justify-content:center;align-items:flex-end;padding-bottom:4px;box-sizing:border-box;z-index:2;touch-action:none}.ds-h3-prompt-field-resizer::after{content:"";width:40px;height:4px;background:rgba(255,255,255,.16);border-radius:2px}.ds-h3-prompt-field-resizer:hover::after,.ds-h3-prompt-field-resizer.active::after{background:rgba(141,215,255,.8)}
-    .ds-h3-video-stream-controls{position:absolute;right:5px;top:4px;z-index:7;display:flex;gap:3px}.ds-h3-clip.selected .ds-h3-video-stream-controls{right:24px}.ds-h3-video-stream-controls button{min-width:24px;padding:3px 6px!important;font-size:11px;line-height:14px;background:rgba(10,17,23,.85)!important}.ds-h3-video-stream-controls button.active{background:rgba(125,82,188,.9)!important;border-color:#d4b3ff;color:#fff}.ds-h3-lock-icon{position:absolute;right:4px;top:4px;z-index:8;font-size:13px;color:#f3c67a;text-shadow:0 0 4px rgba(0,0,0,.9);pointer-events:none}.ds-h3-edit-btn{position:absolute;right:5px;bottom:5px;z-index:7;font-size:14px;padding:3px 6px!important;border-radius:3px!important;background:rgba(20,35,45,.8)!important;border-color:rgba(100,150,180,.5)!important}.ds-h3-empty-slot{display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:#7eeba7;border:1.5px dashed #7eeba7;border-radius:6px;cursor:pointer;box-sizing:border-box;background:rgba(126,235,167,.06);transition:all .15s ease;pointer-events:auto}.ds-h3-empty-slot:hover{background:rgba(126,235,167,.18);border-color:#bff3d0;color:#d4ffe1;box-shadow:0 0 14px rgba(126,235,167,.45);transform:scale(1.02)}.ds-h3-timeline-lane.disabled .ds-h3-empty-slot{opacity:.15;cursor:not-allowed;pointer-events:none}.ds-h3-timeline-lane.audio .ds-h3-empty-slot{color:#5b8dd9;border-color:#5b8dd9;background:rgba(91,141,217,.06)}.ds-h3-timeline-lane.audio .ds-h3-empty-slot:hover{background:rgba(91,141,217,.18);border-color:#8bb4f0;color:#b3d4fc;box-shadow:0 0 14px rgba(91,141,217,.45)}
+    .ds-h3-video-stream-controls{position:absolute;right:5px;top:4px;z-index:7;display:flex;gap:3px}.ds-h3-clip.selected .ds-h3-video-stream-controls{right:24px}.ds-h3-video-stream-controls button{min-width:24px;padding:3px 6px!important;font-size:11px;line-height:14px;background:rgba(10,17,23,.85)!important}.ds-h3-video-stream-controls button.active{background:rgba(125,82,188,.9)!important;border-color:#d4b3ff;color:#fff}.ds-h3-lock-icon{position:absolute;right:4px;top:4px;z-index:8;font-size:13px;color:#f3c67a;text-shadow:0 0 4px rgba(0,0,0,.9);pointer-events:none}.ds-h3-edit-btn{position:absolute;right:5px;bottom:5px;z-index:7;font-size:14px;padding:3px 6px!important;border-radius:3px!important;background:rgba(20,35,45,.8)!important;border-color:rgba(100,150,180,.5)!important}.ds-h3-empty-slot{display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:#7eeba7;border:1.5px dashed #7eeba7;border-radius:6px;cursor:pointer;box-sizing:border-box;background:rgba(126,235,167,.06);transition:all .15s ease;pointer-events:auto}.ds-h3-empty-slot:hover{background:rgba(126,235,167,.18);border-color:#bff3d0;color:#d4ffe1;box-shadow:0 0 14px rgba(126,235,167,.45);transform:scale(1.02)}.ds-h3-timeline-lane.disabled .ds-h3-empty-slot{opacity:.15;cursor:not-allowed;pointer-events:none}.ds-h3-timeline-lane.audio .ds-h3-empty-slot{color:#5b8dd9;border-color:#5b8dd9;background:rgba(91,141,217,.06)}.ds-h3-timeline-lane.audio .ds-h3-empty-slot:hover{background:rgba(91,141,217,.18);border-color:#8bb4f0;color:#b3d4fc;box-shadow:0 0 14px rgba(91,141,217,.45)}.ds-h3-prompt-panel.disabled{opacity:.5;filter:grayscale(.55)}.ds-h3-prompt-panel.disabled textarea,.ds-h3-prompt-panel.disabled input,.ds-h3-prompt-panel.disabled button{pointer-events:none}.ds-h3-ext-note{font-weight:600;color:#7ec8f0}
   `;
   document.head.appendChild(style);
 }
@@ -126,6 +126,14 @@ function install(node) {
   if (modeWidget) { modeWidget.hidden = true; modeWidget.draw = () => {}; modeWidget.computeSize = () => [0, -4]; }
   const prompt = () => node.widgets?.find(w => w.name === "prompt");
   const promptWidget = prompt(); if (promptWidget) { promptWidget.hidden = true; promptWidget.draw = () => {}; promptWidget.computeSize = () => [0, -4]; }
+  const externalPromptWidget = () => node.widgets?.find(w => w.name === "external_prompt");
+  const externalPromptInput = () => node.inputs?.find(i => i.name === "external_prompt");
+  const hasExternalPrompt = () => {
+    if (externalPromptInput()?.link != null) return true;
+    const w = externalPromptWidget();
+    return Boolean(w && String(w.value || "").trim().length > 0);
+  };
+  let lastExternalPromptLinked = hasExternalPrompt();
   const status = document.createElement("div"); status.className = "ds-h3-status ds-h3-info-field"; status.textContent = ""; status.style.display = "none";
   const timeline = document.createElement("div"); timeline.className = "ds-h3 ds-h3-root"; timeline.tabIndex = 0;
   const setStatus = (message, isError = false) => { status.textContent = message; status.classList.toggle("error", isError); };
@@ -212,7 +220,12 @@ function install(node) {
   function showPromptPreview() {
     const m = mode();
     let promptText = "";
-    if (m === "REF2VA") {
+    if (hasExternalPrompt()) {
+      promptText = String(externalPromptWidget()?.value || "");
+      if (!promptText.trim()) {
+        promptText = "(External prompt detected — the prompt is supplied by the upstream node at execution time.)";
+      }
+    } else if (m === "REF2VA") {
       const areas = timeline.querySelectorAll(".ds-h3-prompt-panel .ds-h3-prompt");
       const vals = [];
       areas.forEach(a => vals.push(String(a.value || "").trim()));
@@ -266,7 +279,7 @@ ${body}` : body;
     overlay.onclick = event => { if (event.target === overlay) overlay.remove(); };
     const panel = document.createElement("div"); panel.style.cssText = "width:min(720px,90vw);max-height:85vh;display:flex;flex-direction:column;background:#111820;border:1px solid #40515e;border-radius:10px;overflow:hidden;box-shadow:0 8px 32px #000;";
     const header = document.createElement("div"); header.style.cssText = "padding:8px 12px;background:#0d1217;color:#dbe7f0;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #344452;";
-    header.innerHTML = `<span>Prompt Preview (${m})</span><button title="Copy">📋</button>`;
+    header.innerHTML = `<span>Prompt Preview (${m}${hasExternalPrompt() ? " · external" : ""})</span><button title="Copy">📋</button>`;
     const copyBtn = header.querySelector("button");
     copyBtn.onclick = () => { navigator.clipboard.writeText(promptText).then(() => { copyBtn.textContent = "✓"; setTimeout(() => copyBtn.textContent = "📋", 1200); }).catch(() => { copyBtn.textContent = "×"; }); };
     const closeBtn = document.createElement("button"); closeBtn.textContent = "×"; closeBtn.style.cssText = "background:none;border:none;color:#fff;font-size:18px;cursor:pointer;padding:0 4px;"; closeBtn.onclick = () => overlay.remove(); header.appendChild(closeBtn);
@@ -543,6 +556,13 @@ ${body}` : body;
     } else {
       buildBaseForm(promptPanel);
     }
+    if (hasExternalPrompt()) {
+      promptPanel.classList.add("disabled");
+      promptPanel.querySelectorAll("textarea, input, button").forEach(el => { el.disabled = true; });
+      const note = document.createElement("div"); note.className = "ds-h3-small ds-h3-ext-note";
+      note.textContent = "External prompt detected — builder fields are disabled.";
+      promptPanel.prepend(note);
+    }
     timeline.append(promptPanel);
     const list = document.createElement("div"); list.className = "ds-h3-list"; list.style.display = "none";
     activeItems().forEach((item, index) => { const row = document.createElement("div"); row.className = "ds-h3-item"; row.draggable = true; row.dataset.id = item.id; row.ondragstart = e => e.dataTransfer.setData("text/plain", item.id); row.ondragover = e => e.preventDefault(); row.ondrop = e => { const from = state.items.findIndex(x => x.id === e.dataTransfer.getData("text/plain")); const to = state.items.findIndex(x => x.id === item.id); if (from >= 0 && to >= 0) mutate(s => { const [x] = s.items.splice(from, 1); s.items.splice(to, 0, x); }); };
@@ -646,14 +666,32 @@ ${body}` : body;
     oldConfigure?.apply(this, args);
     requestAnimationFrame(restorePersistedState);
   };
+  const oldConnectionsChange = node.onConnectionsChange;
+  node.onConnectionsChange = function (...args) {
+    oldConnectionsChange?.apply(this, args);
+    const linked = hasExternalPrompt();
+    if (linked !== lastExternalPromptLinked) {
+      lastExternalPromptLinked = linked;
+      requestAnimationFrame(render);
+    }
+  };
   node.__dasiwaH3RestorePersistedState = () => requestAnimationFrame(restorePersistedState);
   node.__dasiwaH3State = () => state; node.__dasiwaH3Render = render;
   if (modeWidget) { const old = modeWidget.callback; modeWidget.callback = value => { old?.(value); render(); }; }
+  const extWidget = externalPromptWidget();
+  if (extWidget) { const old = extWidget.callback; extWidget.callback = value => { old?.(value); render(); }; }
   const lengthWidget = node.widgets?.find(w => w.name === "duration");
   if (lengthWidget) { const old = lengthWidget.callback; lengthWidget.callback = value => { old?.(value); render(); }; }
   const oldDrawForeground = node.onDrawForeground;
   node.onDrawForeground = function (...args) { oldDrawForeground?.apply(this, args); const seconds = Math.max(1, Number(lengthWidget?.value) || 5); if (seconds !== lastTimelineLength) render(); };
   node.__dasiwaH3LengthPoll = window.setInterval(() => { const seconds = Math.max(1, Number(lengthWidget?.value) || 5); if (seconds !== lastTimelineLength) render(); }, 200);
+  node.__dasiwaH3ExtPoll = window.setInterval(() => {
+    const linked = hasExternalPrompt();
+    if (linked !== lastExternalPromptLinked) {
+      lastExternalPromptLinked = linked;
+      render();
+    }
+  }, 300);
   syncNodeBounds();
   requestAnimationFrame(syncNodeBounds);
   render();
