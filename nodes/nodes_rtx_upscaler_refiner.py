@@ -440,6 +440,8 @@ class DaSiWa_RTX_UpscalerRefiner:
                 "ratio_preset": (COMMON_RATIOS, {"default": "16:9", "description": "Forced aspect ratio (used by 'Preset Ratio')."}),
                 "resize_method": (RESIZE_METHODS, {"default": "Center Crop (Fill)", "description": "Mismatch handling: 'Crop' fills the target area, 'Letterbox' fits inside with black bars."}),
                 "device_id": ("INT", {"default": 0, "min": 0, "max": 8, "step": 1, "description": "GPU Index for RTX VFX computation."}),
+            },
+            "optional": {
                 "empty_cache": ("BOOLEAN", {"default": False, "description": "Run a lightweight GC + empty_cache before allocation; also calls model_management.soft_empty_cache() to ask ComfyUI models to unload, which can free VRAM but may slow subsequent nodes."}),
             },
         }
@@ -480,7 +482,7 @@ class DaSiWa_RTX_UpscalerRefiner:
         ratio_preset,
         resize_method,
         device_id,
-        empty_cache,
+        empty_cache=False,
     ):
         if not torch.cuda.is_available():
             raise RuntimeError("NVIDIA RTX VFX requires CUDA. No CUDA devices found.")
