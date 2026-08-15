@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import threading
 import time
+import warnings
 from pathlib import Path
 
 import psutil
@@ -19,6 +20,35 @@ except ImportError:
 
 UNKNOWN = None
 NVIDIA_QUERY = "index,uuid,name,utilization.gpu,memory.used,memory.total,temperature.gpu"
+
+
+def _probe(callable_, default):
+    """Run a hardware/psutil probe, swallowing warnings and errors.
+
+    Containers and some sandboxes expose incomplete /proc, which makes psutil
+    raise or emit RuntimeWarning (e.g. missing /proc/vmstat for swap). A probe
+    must never crash the monitor or spam the log, so we silence warnings and
+    fall back to a default.
+    """
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            return callable_()
+    except Exception:
+        return default
+
+
+def _memory_fields(sample):
+    if sample is None:
+        return {"used": UNKNOWN, "total": UNKNOWN, "percent": UNKNOWN}
+    return {"used": sample.used, "total": sample.total, "percent": sample.percent}
+
+
+def _monitor_enabled():
+    """Continuous polling is on by default; any explicit falsy value disables it."""
+    return os.environ.get("DASWA_SYSTEM_MONITOR", "").strip().lower() not in (
+        "0", "false", "no", "off", "disable", "disabled",
+    )
 
 
 def _number(value):
@@ -185,12 +215,12 @@ class DaSiWaSystemMonitor:
         self._previous_disk_io_time = None
 
     def gpu_info(self):
-        gpus = _nvidia_gpus() + _amd_gpus()
+        gpus = _probe(_nvidia_gpus, []) + _probe(_amd_gpus, [])
         if os.name == "nt":
             vendor_telemetry = {gpu["vendor"] for gpu in gpus}
-            gpus.extend(gpu for gpu in _windows_gpus() if gpu["vendor"] not in vendor_telemetry)
+            gpus.extend(gpu for gpu in _probe(_windows_gpus, []) if gpu["vendor"] not in vendor_telemetry)
         else:
-            gpus.extend(_intel_gpus())
+            gpus.extend(_probe(_intel_gpus, []))
         return gpus
 
     @staticmethod
@@ -261,14 +291,13 @@ class DaSiWaSystemMonitor:
         return selected
 
     def snapshot(self):
-        memory = psutil.virtual_memory()
-        swap = psutil.swap_memory()
+        memory = _probe(psutil.virtual_memory, None)
+        swap = _probe(psutil.swap_memory, None)
         disk_io_rates = self._disk_io_rates()
         disks = []
         for partition in self._monitored_partitions():
-            try:
-                usage = psutil.disk_usage(partition.mountpoint)
-            except (OSError, PermissionError):
+            usage = _probe(lambda p=partition: psutil.disk_usage(p.mountpoint), None)
+            if usage is None:
                 continue
             read_mb_s, write_mb_s = disk_io_rates.get(self._disk_device_name(partition.device), (0.0, 0.0))
             disks.append({
@@ -282,10 +311,10 @@ class DaSiWaSystemMonitor:
                 "write_mb_s": round(write_mb_s, 1),
             })
         return {
-            "cpu_percent": psutil.cpu_percent(interval=None),
-            "cpu_count": psutil.cpu_count(logical=True),
-            "ram": {"used": memory.used, "total": memory.total, "percent": memory.percent},
-            "swap": {"used": swap.used, "total": swap.total, "percent": swap.percent},
+            "cpu_percent": _probe(lambda: psutil.cpu_percent(interval=None), UNKNOWN),
+            "cpu_count": _probe(lambda: psutil.cpu_count(logical=True), UNKNOWN),
+            "ram": _memory_fields(memory),
+            "swap": _memory_fields(swap),
             "disks": disks,
             "gpus": self.gpu_info(),
         }
@@ -305,7 +334,7 @@ class DaSiWaSystemMonitor:
 
 
 monitor = DaSiWaSystemMonitor()
-if PromptServer is not None:
+if PromptServer is not None and _monitor_enabled():
     monitor.start()
 
     @PromptServer.instance.routes.get("/dasiwa/system-monitor")
