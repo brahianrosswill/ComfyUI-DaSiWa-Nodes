@@ -263,7 +263,11 @@ def _format_filename_prefix(filename_prefix):
 
 
 def _output_filename(filename, counter, extension, has_audio):
-    audio_suffix = "-audio" if has_audio else ""
+    # Use an underscore (not a dash) for the audio marker: ComfyUI's
+    # get_save_image_path counter-scanner only parses digits when the char
+    # right after the filename prefix is "_". A dash makes the digit block
+    # unparseable, so the counter resets to 1 and audio outputs overwrite.
+    audio_suffix = "_audio" if has_audio else ""
     return f"{filename}_{counter:05}{audio_suffix}.{extension.lstrip('.')}"
 
 
