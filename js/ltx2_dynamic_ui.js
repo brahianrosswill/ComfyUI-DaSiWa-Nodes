@@ -74,8 +74,8 @@ const MODEL_TYPES = ["Basic", "LTX-2.3"];
 const hasSeparatedAudio = modelType => modelType === "LTX-2.3";
 const keyCache = {};
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-const bump = (v, d) => Math.round(clamp((v || 1.0) + d, 0.0, 2.0) * 100) / 100;
-const bumpS = (v, d) => Math.round(clamp((v || 1.0) + d, -5.0, 5.0) * 100) / 100;
+const bump = (v, d) => Math.round(clamp((v ?? 1.0) + d, 0.0, 2.0) * 100) / 100;
+const bumpS = (v, d) => Math.round(clamp((v ?? 1.0) + d, -5.0, 5.0) * 100) / 100;
 
 async function getCurrentLoraList(nodeData) {
   const fallback = nodeData?.input?.hidden?.available_loras?.[0] || ["None"];
