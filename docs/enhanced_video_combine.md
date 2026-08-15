@@ -16,6 +16,7 @@ Click the small `?` at the right of the node title for the same concise in-app r
 
 The node is deliberately designed to avoid fixed, host-specific video settings:
 
+- **Audio output uniqueness (fix):** Audio sidecar files were named `video_00001-audio.mp4` (dash), making the counter unparseable by `folder_paths.get_save_image_path`, which expected an underscore after the prefix. Every audio save therefore overwrote the previous one. The separator is now an underscore (`video_00001_audio.mp4`, `video_00002_audio.mp4`, …) so the counter increments correctly.
 - **Codec and encoder selection:** `Auto` tests browser-compatible 8-bit AV1/WebM first, then VP9, then H.264. H.265/HEVC is excluded from Auto and must be chosen explicitly. For each candidate the node prefers NVIDIA NVENC, then Intel QSV, AMD AMF, VAAPI, and finally a software encoder. An advertised FFmpeg encoder is not trusted until an actual encode attempt succeeds.
 - **Container safety:** Auto tries compatible container sequences for each codec and prevents an incompatible preference from being the only path. If all selected candidates fail, it attempts the mandatory H.264/MP4 fallback.
 - **Source precision:** with an explicit codec, `bit_depth=Auto` detects 8-bit versus 10-bit image-batch quantization. Browser-compatible codec `Auto` always emits 8-bit 4:2:0.

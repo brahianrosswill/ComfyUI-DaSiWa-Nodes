@@ -8,6 +8,7 @@ Since the last GitHub release (August 2026):
 
 ### New features
 
+- **External prompt input:** new optional `external_prompt` (STRING) input. When connected and non-empty it overrides the assembled builder output, so you can feed a fully hand-written MiniMax H3 prompt from any upstream node. When left empty the normal prompt builder runs unchanged.
 - **REF2VA prompt builder redesigned:** simplified to six free-text fields (subject_definitions, summary, retention_analysis, detailed_description, overall_soundscape, non_diegetic_music). Headers are added automatically when the prompt is sent upstream. Legacy v1 structured-builder data is merged backward-compatibly into these fields.
 - **Insert [Shot N] button:** opens a small dialog asking for a shot number, then inserts `[Shot N] ` at the current cursor position in the appropriate text area — no more manual typing.
 - **Prefill Labels & Summary button (REF2VA):** scans your inserted media and generates `<Picture N>`, `<Video N>`, and `<Audio N>` label lines plus a task-prefixed summary line so you can focus on editing instead of boilerplate.
@@ -27,6 +28,9 @@ Since the last GitHub release (August 2026):
 
 ### Bug fixes
 
+- **Packed stereo audio duration (WAV/PCM):** PyAV returns planar formats (MP3/AAC/OGG) as `(channels, samples)` but packed formats (s16 PCM WAV, flt, s32) as one interleaved row. `load_audio()` read the shape as always `(channels, samples)`, so a stereo WAV measured twice its real length — a 10 s reference was rejected as "20 s", and under 7.5 s it reached the model at double speed with every crop offset on the wrong sample. New `decode_audio_frame()` derives channel count from the frame, de-interleaves packed frames, and normalizes integer PCM to float; both the standalone-audio and embedded-video-audio loaders share it.
+- **Integer PCM scaling by magnitude:** signed PCM was divided by `np.iinfo(dtype).max`, leaving a full-scale `-32768` at `-1.00003` (just outside the unit range). A single full-scale sample then tripped a legacy `abs().max() > 1` guard in `load_embedded_video_audio()`, which divided the whole soundtrack by 32768 — a ~90 dB attenuation. Signed formats are now scaled by `-iinfo(dtype).min` and unsigned 8-bit (silence at 128) is centered on its midpoint; the legacy guard is dropped because `decode_audio_frame()` now guarantees the unit range.
+- **KeyError `'imd'` on every REF2VA run (PR #15):** REF2VA prompts no longer hit a missing `imd` key during prompt assembly.
 - Non-string values in prompt-builder fields no longer crash with `.strip()` TypeError.
 - Textarea `onChange` callbacks now receive the string value, not the raw Event object.
 - Missing `p2_shot`/`last_shot` builder keys guarded against KeyError outside FL2VA/L2VA modes.

@@ -20,7 +20,7 @@ The current settings are stored in the browser, so they remain active after a Co
 
 ### Lite (default)
 
-Lite keeps the monitor in the toolbar as compact, fixed-width meters. It is intended for continuous at-a-glance monitoring while working in ComfyUI.
+Lite keeps the monitor in the toolbar as compact, content-sized meters. Each chip sizes to its label and value (`max-content`) so text never clips at any resolution, font, or DPI. It is intended for continuous at-a-glance monitoring while working in ComfyUI.
 
 Use the small grip at the monitor's left edge to float it above the canvas. To dock it again, drag that grip to a visible top, left, or right dock target and release it there. The settings menu provides the same dock controls without dragging.
 
@@ -110,4 +110,25 @@ Additionally, updates are broadcast via WebSocket event `dasiwa.system_monitor` 
 
 ## Disabling
 
-Use the settings button next to the monitor and disable **Show system monitor**. The setting is browser-local and does not stop the lightweight backend telemetry endpoint or WebSocket event; this keeps re-enabling instant without requiring a ComfyUI restart.
+Two independent levels:
+
+- **Browser-local (UI):** Use the settings button next to the monitor and disable **Show system monitor**. This only hides the panel in your browser; it does not stop the lightweight backend telemetry thread, which keeps the WebSocket event and REST endpoints live so re-enabling is instant without a ComfyUI restart.
+- **Backend (real disable):** Set the `DASWA_SYSTEM_MONITOR` environment variable to `0`, `false`, `no`, `off`, `disable`, or `disabled` before starting ComfyUI. This skips starting the polling thread entirely — no `psutil` sampling and no `nvidia-smi`/`rocm-smi` subprocess calls. Any other value (or an unset variable) leaves the monitor on, preserving the default local-run behavior.
+
+```bash
+# bash / zsh
+export DASWA_SYSTEM_MONITOR=0
+
+# fish
+set -x DASWA_SYSTEM_MONITOR 0
+```
+
+## Container / sandbox safety
+
+Cloud containers and sandboxes often expose an incomplete `/proc` (for example, no `/proc/vmstat`). Every hardware and `psutil` probe now runs through a guarded wrapper that suppresses the resulting `RuntimeWarning` and falls back to a safe default, so:
+
+- A missing swap source reports `n/a` (used/total/percent = null) instead of spitting a per-second `RuntimeWarning` into the log.
+- A failing `nvidia-smi`/`rocm-smi`/DRM probe returns an empty GPU list instead of raising.
+- The monitor thread never crashes the ComfyUI server because of an unavailable stat.
+
+This is independent of the disable switch above — leaving the monitor on in a container is now quiet.

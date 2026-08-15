@@ -18,6 +18,8 @@ Each slot lets you:
 **Effective video strength** = STR × V×  
 **Effective audio strength** = STR × A×
 
+> **Fix (v0.4.13):** the STR / VIS / A steppers no longer bounce off `0`. The old `|| 1.0` fallback treated a real `0` as falsy, so STR snapped back to a positive default and could not go negative, and VIS/A would not hold at `0`. The UI now uses a nullish fallback (`?? 1.0`), so a genuine `0` is preserved and STR spans its full negative-to-positive range.
+
 ---
 
 ## Why This Matters
