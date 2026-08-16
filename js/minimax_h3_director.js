@@ -58,8 +58,7 @@ function builderHasContent(builder) {
   const ref = builder.ref;
   return !!(ref && typeof ref === "object" && (
     ["subject_definitions", "summary", "retention_analysis", "detailed_description", "soundscape"].some(key => textValue(ref[key])) ||
-    (Array.isArray(ref.subject_defs) && ref.subject_defs.length) ||
-    (Array.isArray(ref.retention) && ref.retention.length)
+    (Array.isArray(ref.subject_defs) && ref.subject_defs.length) || (Array.isArray(ref.retention) && ref.retention.length)
   ));
 }
 function legacyPrompt(state, widgetPrompt) {
@@ -225,7 +224,7 @@ function install(node) {
     }));
   }, { passive: false });
   const setStatus = (message, isError = false) => { status.textContent = message; status.classList.toggle("error", isError); };
-  const emit = () => { builderState.mode = mode(); state.builder_state = builderState; dataWidget.value = JSON.stringify(state); dataWidget.callback?.(dataWidget.value); if (builderWidget) { builderWidget.value = JSON.stringify(builderState); builderWidget.callback?.(builderWidget.value); } node.graph?.setDirtyCanvas(true, true); };
+  const emit = () => { builderState.mode = mode(); const duration = Number(node.widgets?.find(w => w.name === "duration")?.value); if (Number.isFinite(duration)) builderState.duration = duration; const resolved = builderPromptForWidget(builderState, mode()); if (promptWidget && promptWidget.value !== resolved) { promptWidget.value = resolved; promptWidget.callback?.(resolved); } state.builder_state = builderState; state.resolved_prompt = resolved; dataWidget.value = JSON.stringify(state); dataWidget.callback?.(dataWidget.value); if (builderWidget) { builderWidget.value = JSON.stringify(builderState); builderWidget.callback?.(builderWidget.value); } node.graph?.setDirtyCanvas(true, true); };
   const promptStyle = () => { const v = builderState?.prompt_mode; return v === "simple" || v === "structured" ? v : "structured"; };
   function legacySimplePromptFor(m) {
     if (m === "REF2VA") {
@@ -244,6 +243,18 @@ function install(node) {
       builderState.soundscape ? `overall_soundscape: ${builderState.soundscape}` : "",
       `non_diegetic_music: ${builderState.music || "N/A"}`,
     ].filter(Boolean).join("\n");
+  }
+  function builderPromptForWidget(builder, m) {
+    if (builder?.prompt_mode === "simple" && typeof builder.simple_prompt === "string") return builder.simple_prompt;
+    const r = builder?.ref || {};
+    if (m === "REF2VA") return `subject_definitions:\n${r.subject_definitions || ""}\n\nsummary:\n${r.summary || ""}\n\nretention_analysis:\n${r.retention_analysis || ""}\n\ndetailed_description:\n${r.detailed_description || ""}\n\noverall_soundscape:\n${r.soundscape || ""}\n\nnon_diegetic_music:\n${r.music || "N/A"}`;
+    const music = builder?.music || "N/A";
+    let head = "";
+    if (m === "I2VA") head = "For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.";
+    else if (m === "FL2VA") head = "How the reference pictures align with the target video — Picture 1 (from Shot 1) aligns with the 0.00-second mark of the target video; Picture 2 (from Shot 2) aligns with the end mark of the target video.";
+    else if (m === "L2VA") head = "How the reference pictures align with the target video — <Picture 1> (from [Shot 1]) aligns with the end mark of the target video.";
+    const body = `integrated_multimodal_description: ${builder?.imd || ""}\n\noverall_soundscape: ${builder?.soundscape || ""}\n\nnon_diegetic_music: ${music}`;
+    return head ? `${head}\n\n${body}` : body;
   }
   function previewTextFor(m, external) {
     if (external) {
@@ -851,17 +862,14 @@ function install(node) {
       builderState = baseDefaults;
       builderState.mode = m;
     }
-    // Workflows created before the builder stored complex text in the ordinary
-    // prompt widget/timeline payload. Keep that exact text editable and queue
-    // it unchanged instead of replacing it with blank structured fields.
     if (!builderHasContent(builderState)) {
       const preserved = legacyPrompt(state, promptWidget?.value);
       if (preserved) {
         builderState.prompt_mode = "simple";
         builderState.simple_prompt = preserved;
-        emit();
       }
     }
+    emit();
     syncNodeBounds();
     render();
     void Promise.all(state.items.filter(item => item.type === "video" && !item.thumbnail).map(async item => {

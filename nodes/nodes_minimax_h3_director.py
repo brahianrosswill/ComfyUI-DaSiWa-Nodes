@@ -183,8 +183,10 @@ class MiniMaxH3Director:
             resolved = external_prompt_overwrite
         else:
             resolved = build_prompt(merged)
-            if not any(str(merged.get(key) or "").strip() for key in ("imd", "soundscape")) and mode != "REF2VA":
-                resolved = build_prompt(merged) if migrated_legacy_prompt else assemble_prompt(prompt, blocks)
+            if (not migrated_legacy_prompt and
+                    not any(str(merged.get(key) or "").strip() for key in ("imd", "soundscape")) and
+                    mode != "REF2VA"):
+                resolved = assemble_prompt(prompt, blocks)
         for issue in validate_builder_state(merged):
             log_dasiwa("MiniMax H3 Director", f"[{issue['level'].upper()}] {issue['msg']}")
         guide = {
