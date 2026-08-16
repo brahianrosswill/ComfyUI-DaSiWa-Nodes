@@ -70,3 +70,10 @@ def test_grouped_menu_uses_column_layout_css():
     assert ".ds-h3-res-menu.cols.open{display:flex;align-items:flex-start;gap:7px}" in src
     assert ".ds-h3-res-col{display:flex;flex-direction:column;gap:2px;min-width:84px}" in src
     assert ".ds-h3-res-col-title{" in src
+
+
+def test_resolution_presets_snap_to_h3_transformer_patch_grid():
+    """H3 patchifies its 16px VAE cells in 2×2 groups, requiring 32px edges."""
+    src = _source()
+    assert "const MINIMAX_MULTIPLE = 32;" in src
+    assert "32px H3 grid" in src
