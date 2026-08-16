@@ -7,7 +7,7 @@ source = source.replace(
     'import { app } from "../../../scripts/app.js";\nimport { api } from "../../../scripts/api.js";',
     "const app = { registerExtension() {} }; const api = {};"
 );
-source += "\nexport { mediaTypeFor, REPOSITORY_URL };";
+source += "\nexport { mediaTypeFor, REPOSITORY_URL, MINIMAX_MULTIPLE, ASPECT_OPTIONS, RESOLUTION_PRESETS };";
 
 assert.match(source, /lane\.ondrop = event => \{ if \(!supported\)/, "each timeline lane must own its direct drop handler");
 assert.match(source, /acceptLaneDrop\(event, targetLane\)/, "supported lane drops must use the direct lane upload path");
@@ -38,20 +38,47 @@ assert.match(source, /Math\.log1p\(9 \* peaks\[peakIndex\]\)/, "audio waveform a
 assert.doesNotMatch(source, /if \(item\.type === "audio"\) return; if \(event\.target !== clip\) return;/, "audio slots must be horizontally movable");
 assert.match(source, /window\.open\(REPOSITORY_URL, "_blank", "noopener,noreferrer"\)/, "the help button must open the GitHub documentation safely");
 assert.match(source, /const promptStyle = \(\) => \{ const v = builderState\?\.prompt_mode;/, "the builder must expose a validated prompt-style accessor");
-assert.match(source, /styleButton\.className = "ds-h3-prompt-mode-btn"/, "the mode bar must render a prompt-style toggle button");
-assert.match(source, /builderState\.prompt_mode = styleLabel === "simple" \? "structured" : "simple"/, "the toggle must flip between the simple and structured styles");
+assert.match(source, /modeLabel\.textContent = "Mode:"/, "the mode bar must label the mode selector");
+assert.match(source, /promptLabel\.textContent = "Prompt Mode:"/, "the mode bar must label the prompt-style selector");
+assert.match(source, /\[\["simple", "Simple"\], \["structured", "Structured"\]\]/, "the prompt-style selector must expose separate Simple and Structured buttons");
+assert.match(source, /promptButton\.classList\.toggle\("active", styleLabel === value\)/, "the selected prompt style must be highlighted");
+assert.match(source, /spacer\.style\.flex = "1"/, "the mode bar must use an automatic spacer before the help button");
 assert.match(source, /function buildSimpleForm\(panel\)/, "simple mode must render its own one-field prompt form");
 assert.match(source, /createBuilderField\("Prompt", builderState\.simple_prompt/, "simple mode must bind the visible field to serialized simple_prompt state");
-assert.match(source, /if \(styleLabel !== "simple"\) builderState\.simple_prompt = previewTextFor\(mode\(\), false\);/, "switching into simple mode must seed the single field from the current builder prompt");
-assert.match(source, /\.ds-h3-prompt-mode-btn\{[^`]*box-shadow:0 0 8px rgba\(126,235,167/, "the prompt-style toggle must use the green-glow accent");
+assert.match(source, /if \(value === "simple"\) builderState\.simple_prompt = previewTextFor\(mode\(\), false\);/, "switching into simple mode must seed the single field from the current builder prompt");
+assert.match(source, /promptButton\.className = "ds-h3-prompt-mode-btn"/, "prompt-style choices must use the prompt-mode button styling");
 assert.match(source, /function showPromptPreview\(\) \{[\s\S]*?const promptText = previewTextFor\(m, hasExternalPrompt\(\)\);/, "the prompt preview must render the selected style");
-assert.doesNotMatch(source, /builderState\.prompt_mode = styleLabel === "structured" \? "simple" : "structured"/, "the toggle must not invert the wrong way");
+assert.match(source, /builderState\.prompt_mode = value/, "prompt-style buttons must set the explicitly selected mode");
 assert.match(source, /const resetBuilderState = \(\) => \{ builderState = DEFAULT_BUILDER_STATE\(mode\(\)\); builderState\.mode = mode\(\); \};/, "Clear must reset all serialized builder fields to the current mode defaults");
 assert.match(source, /const clearAll = \(\) => \{ selectedId = null; resetBuilderState\(\);/, "Clear must reset prompt/text fields as well as selected media");
 assert.match(source, /const hasContent = state\.items\.length \|\| state\.prompt_blocks\?\.length \|\| hasBuilderContent\(\) \|\| String\(promptWidget\?\.value \|\| ""\)\.trim\(\);/, "Clear must remain available when only builder text is filled");
 
+assert.match(source, /function probeDimensions\(value, type\)/, "visual uploads must probe image and video source dimensions");
+assert.match(source, /source_width: width, source_height: height/, "source dimensions must persist with the media item");
+assert.match(source, /ds-h3-resolution-panel/, "the resolution controls must render in their own panel");
+assert.match(source, /Auto · short side 768 px/, "Auto resolution must describe the MiniMax 768px short-side default");
+assert.match(source, /MINIMAX_MULTIPLE = 16/, "MiniMax output dimensions must align to 16 pixels");
+assert.match(source, /source \? Number\(source\.source_width\) \/ Number\(source\.source_height\) : 4 \/ 3/, "Auto aspect must use the MiniMax T2VA 4:3 fallback without visual media");
+assert.match(source, /settings\.resolution === "custom" && settings\.custom_mode === "fixed"\) return \[snap16\(settings\.custom_width\), snap16\(settings\.custom_height\)\]/, "fixed custom pixels must resolve without a media-derived aspect");
+assert.match(source, /options\.forEach\([\s\S]*?select\.value = value; select\.oninput/, "resolution selects must set their value after options exist and react on input");
+assert.match(source, /Auto aspect" : settings\.aspect\} · \$\{settings\.resolution === "auto" \? "Auto 768px" : settings\.resolution\}/, "the readout must identify the actual selected aspect and resolution");
+assert.match(source, /INPUT SCALING/, "the resolution panel must expose the third input-scaling dropdown");
+assert.match(source, /input_scaling: "Auto"/, "input scaling must default to Auto alongside Aspect and Resolution");
+assert.match(source, /\["Off", "Off"\], \["Auto", "Auto · short edge 2048 px"\], \["Target", "Target · Selected Aspect & Resolution"\], \["Fit", "Fit"\]/, "input scaling must expose the reused Torch Resize behaviours");
+assert.match(source, /external_width_overwrite/, "the Director frontend must recognize the external width overwrite input");
+assert.match(source, /external_height_overwrite/, "the Director frontend must recognize the external height overwrite input");
+assert.match(source, /external_prompt_overwrite/, "the external prompt input must be named as an overwrite");
+assert.match(source, /function migrateLegacyExternalPromptInput\(\)/, "restored Director nodes must migrate the old external prompt socket");
+assert.match(source, /legacy\.name = "external_prompt_overwrite"/, "a linked legacy prompt socket must be renamed instead of duplicated");
+assert.match(source, /hasExternalCanvas\(\).*return;/, "external dimensions must prevent Director canvas recalculation");
+assert.match(source, /Director sizing and input scaling disabled/, "the UI must disclose external canvas overwrite mode");
+assert.match(source, /ds-h3-fixed-dimensions/, "fixed custom resolution must group its dimensions in a dedicated row");
+assert.match(source, /display:flex;gap:6px/, "fixed custom resolution dimensions must use a horizontal flex layout");
+assert.match(source, /dimensionField\("WIDTH", settings\.custom_width/, "fixed custom resolution must label the width field");
+assert.match(source, /dimensionField\("HEIGHT", settings\.custom_height/, "fixed custom resolution must label the height field");
+
 const moduleUrl = `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
-const { mediaTypeFor, REPOSITORY_URL } = await import(moduleUrl);
+const { mediaTypeFor, REPOSITORY_URL, MINIMAX_MULTIPLE, ASPECT_OPTIONS, RESOLUTION_PRESETS } = await import(moduleUrl);
 
 for (const [name, type] of [
     ["reference.webp", "image"],
@@ -66,3 +93,7 @@ for (const [name, type] of [
 assert.equal(mediaTypeFor({ name: "reference.bin", type: "" }), null, "unknown files must not be uploaded as media");
 assert.equal(mediaTypeFor({ name: "renamed.bin", type: "audio/ogg" }), "audio", "known MIME types take precedence over extensions");
 assert.equal(REPOSITORY_URL, "https://github.com/darksidewalker/ComfyUI-DaSiWa-Nodes/blob/main/docs/minimax_h3_director.md");
+assert.equal(MINIMAX_MULTIPLE, 16);
+assert.equal(ASPECT_OPTIONS[0][0], "auto");
+assert.equal(ASPECT_OPTIONS.at(-1)[0], "custom");
+assert.equal(RESOLUTION_PRESETS["8.30 MP - UHD"], 8.30);

@@ -11,8 +11,19 @@ const TASK_TYPES_JS = ["keyframe completion","reference generation","video editi
 const VISUAL_MARKERS_JS = ["fully_preserved","partially_preserved","attribute_transfer","weak_reference"];
 const AUDIO_MARKERS_JS = ["fully_copy","partially_copy","reference","weak_reference"];
 const ALL_MARKERS_JS = [...new Set([...VISUAL_MARKERS_JS,...AUDIO_MARKERS_JS])];
-const DEFAULT_STATE = { version: 1, items: [], prompt_blocks: [], builder_state: null };
+const DEFAULT_STATE = { version: 1, items: [], prompt_blocks: [], builder_state: null, resolution: null };
 const MAX = { image: 9, video: 3, audio: 3, total: 12 };
+const MINIMAX_MULTIPLE = 16;
+const ASPECT_OPTIONS = [["auto", "Auto"], ["1:1", "1:1"], ["16:9", "16:9"], ["9:16", "9:16"], ["2:1", "2:1"], ["1:2", "1:2"], ["3:2", "3:2"], ["2:3", "2:3"], ["4:3", "4:3"], ["3:4", "3:4"], ["4:5", "4:5"], ["5:4", "5:4"], ["custom", "CUSTOM"]];
+const RESOLUTION_PRESETS = {
+  "144p": 0.0352, "240p": 0.0977, "360p": 0.22, "480p": 0.391, "540p": 0.494, "576p": 0.396,
+  "720p": 0.879, "900p": 1.373, "1024p": 1.00, "1080p": 1.978, "1152p": 2.25, "1440p": 3.516,
+  "2160p": 7.91, "2K": 3.906, "4K": 7.91,
+  "0.26 MP - Preview": 0.26, "0.36 MP - Small": 0.36, "0.52 MP - SD": 0.52, "0.65 MP - Balanced": 0.65,
+  "0.83 MP - HD": 0.83, "1.00 MP - 1024p": 1.00, "1.05 MP - HD+": 1.05, "1.20 MP - HD++": 1.20,
+  "1.35 MP - 2K lite": 1.35, "1.55 MP - 2K": 1.55, "1.65 MP - 2K+": 1.65, "1.75 MP - QHD": 1.75,
+  "2.10 MP - FHD": 2.10, "3.30 MP - QHD+": 3.30, "4.75 MP - 2K Pro": 4.75, "6.50 MP - Production": 6.50, "8.30 MP - UHD": 8.30,
+};
 const REPOSITORY_URL = "https://github.com/darksidewalker/ComfyUI-DaSiWa-Nodes/blob/main/docs/minimax_h3_director.md";
 const IMAGE_EXTENSIONS = new Set(["avif", "bmp", "gif", "heic", "heif", "jpeg", "jpg", "jxl", "png", "tif", "tiff", "webp"]);
 const VIDEO_EXTENSIONS = new Set(["3gp", "avi", "flv", "m2ts", "m4v", "mkv", "mov", "mp4", "mpeg", "mpg", "mts", "ts", "webm", "wmv"]);
@@ -123,16 +134,40 @@ function install(node) {
   if (builderWidget) { builderWidget.hidden = true; builderWidget.draw = () => {}; builderWidget.computeSize = () => [0, -4]; }
   const modeWidget = node.widgets?.find(w => w.name === "mode");
   if (modeWidget) { modeWidget.hidden = true; modeWidget.draw = () => {}; modeWidget.computeSize = () => [0, -4]; }
+  const widthWidget = node.widgets?.find(w => w.name === "width");
+  const heightWidget = node.widgets?.find(w => w.name === "height");
+  for (const widget of [widthWidget, heightWidget]) { if (widget) { widget.hidden = true; widget.draw = () => {}; widget.computeSize = () => [0, -4]; } }
   const prompt = () => node.widgets?.find(w => w.name === "prompt");
   const promptWidget = prompt(); if (promptWidget) { promptWidget.hidden = true; promptWidget.draw = () => {}; promptWidget.computeSize = () => [0, -4]; }
-  const externalPromptWidget = () => node.widgets?.find(w => w.name === "external_prompt");
-  const externalPromptInput = () => node.inputs?.find(i => i.name === "external_prompt");
+  function migrateLegacyExternalPromptInput() {
+    const legacyIndex = node.inputs?.findIndex(input => input.name === "external_prompt") ?? -1;
+    if (legacyIndex < 0) return;
+    const overwriteIndex = node.inputs?.findIndex(input => input.name === "external_prompt_overwrite") ?? -1;
+    const legacy = node.inputs[legacyIndex];
+    if (overwriteIndex >= 0) {
+      const overwrite = node.inputs[overwriteIndex];
+      if (legacy.link != null && overwrite.link == null) {
+        node.removeInput(overwriteIndex);
+        legacy.name = "external_prompt_overwrite";
+        return;
+      }
+      node.removeInput(legacyIndex);
+      return;
+    }
+    legacy.name = "external_prompt_overwrite";
+  }
+  migrateLegacyExternalPromptInput();
+  const externalPromptWidget = () => node.widgets?.find(w => w.name === "external_prompt_overwrite");
+  const externalPromptInput = () => node.inputs?.find(i => i.name === "external_prompt_overwrite");
+  const externalCanvasInput = name => node.inputs?.find(i => i.name === name);
+  const hasExternalCanvas = () => externalCanvasInput("external_width_overwrite")?.link != null && externalCanvasInput("external_height_overwrite")?.link != null;
   const hasExternalPrompt = () => {
     if (externalPromptInput()?.link != null) return true;
     const w = externalPromptWidget();
     return Boolean(w && String(w.value || "").trim().length > 0);
   };
   let lastExternalPromptLinked = hasExternalPrompt();
+  let lastExternalCanvasLinked = hasExternalCanvas();
   const status = document.createElement("div"); status.className = "ds-h3-status ds-h3-info-field"; status.textContent = ""; status.style.display = "none";
   const timeline = document.createElement("div"); timeline.className = "ds-h3 ds-h3-root"; timeline.tabIndex = 0;
   const setStatus = (message, isError = false) => { status.textContent = message; status.classList.toggle("error", isError); };
@@ -450,7 +485,7 @@ function install(node) {
     window.addEventListener("keydown", previewCloseFn);
   }
   const syncAttachedPrompts = () => { const attached = state.items.filter(item => String(item.prompt || "").trim()).map((item, index) => ({ id: `attached-${item.id}`, text: String(item.prompt).trim(), enabled: item.enabled !== false, start: Number(item.start) || 0, duration: Number(item.duration) || 1, order: index })); if (attached.length || state.items.every(item => !item.prompt)) state.prompt_blocks = attached; };
-  const mutate = fn => { fn(state); syncAttachedPrompts(); state.items.forEach((x, i) => { x.order = i; }); state.prompt_blocks.forEach((x, i) => { x.order = i; }); emit(); render(); };
+  const mutate = fn => { fn(state); syncAttachedPrompts(); state.items.forEach((x, i) => { x.order = i; }); state.prompt_blocks.forEach((x, i) => { x.order = i; }); applyResolution?.(); emit(); render(); };
   const activeItems = () => state.items.filter(x => x.enabled !== false);
   const isReferenceMode = () => mode() === "REF2VA";
   const allowsType = type => isReferenceMode() || ((mode() === "I2VA" || mode() === "FL2VA" || mode() === "L2VA") && type === "image");
@@ -478,6 +513,23 @@ function install(node) {
   timeline.addEventListener("keydown", event => { if (event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLInputElement) return; if ((event.key === "Delete" || event.key === "Backspace") && selectedId) { const sel = state.items.find(x => x.id === selectedId); if (sel && isLockedSlot(sel)) { setStatus(`${mediaReferenceName(sel.type)} ${sel.slot + 1} is locked in L2VA mode`, true); return; } event.preventDefault(); event.stopPropagation(); remove(selectedId); } });
   const move = (id, delta) => mutate(s => { const i = s.items.findIndex(x => x.id === id); const j = i + delta; if (i >= 0 && j >= 0 && j < s.items.length) [s.items[i], s.items[j]] = [s.items[j], s.items[i]]; });
   const replace = (id, value) => mutate(s => { const x = s.items.find(i => i.id === id); if (x) x.value = value; });
+  const resolutionState = () => ({ aspect: "auto", resolution: "auto", input_scaling: "Auto", custom_aspect_w: 16, custom_aspect_h: 9, custom_mp: 1, custom_width: 1344, custom_height: 768, ...(state.resolution || {}) });
+  const snap16 = value => Math.max(MINIMAX_MULTIPLE, Math.round(Number(value) / MINIMAX_MULTIPLE) * MINIMAX_MULTIPLE);
+  const sourceDimensions = () => activeItems().filter(item => (item.type === "image" || item.type === "video") && Number(item.source_width) > 0 && Number(item.source_height) > 0).sort((a, b) => a.order - b.order)[0];
+  const selectedAspect = settings => {
+    if (settings.aspect === "auto") { const source = sourceDimensions(); return source ? Number(source.source_width) / Number(source.source_height) : 4 / 3; }
+    if (settings.aspect === "custom") return Math.max(1, Number(settings.custom_aspect_w) || 16) / Math.max(1, Number(settings.custom_aspect_h) || 9);
+    const [w, h] = String(settings.aspect).split(":").map(Number); return w > 0 && h > 0 ? w / h : null;
+  };
+  const setCanvasWidgets = (width, height) => { for (const [widget, value] of [[widthWidget, width], [heightWidget, height]]) { if (widget) { widget.value = value; widget.callback?.(value); } } node.setDirtyCanvas?.(true, true); };
+  const resolveCanvas = settings => {
+    if (settings.resolution === "custom" && settings.custom_mode === "fixed") return [snap16(settings.custom_width), snap16(settings.custom_height)];
+    const aspect = selectedAspect(settings); if (!aspect) return null;
+    if (settings.resolution === "auto") { const shortSide = 768; return aspect >= 1 ? [snap16(shortSide * aspect), shortSide] : [shortSide, snap16(shortSide / aspect)]; }
+    if (settings.resolution === "custom") { const pixels = Math.max(.01, Number(settings.custom_mp) || 1) * 1024 * 1024; const h = Math.sqrt(pixels / aspect); return [snap16(h * aspect), snap16(h)]; }
+    const pixels = Number(RESOLUTION_PRESETS[settings.resolution]) * 1024 * 1024; const h = Math.sqrt(pixels / aspect); return [snap16(h * aspect), snap16(h)];
+  };
+  const applyResolution = () => { if (hasExternalCanvas()) return; const canvas = resolveCanvas(resolutionState()); if (canvas) setCanvasWidgets(...canvas); };
 
   const addPath = type => { if (!allowsType(type)) return; if (count(state, type) >= MAX[type] || activeItems().length >= MAX.total) { status.textContent = `Limit reached: ${MAX[type]} ${type}s / ${MAX.total} files.`; return; } fileInput.accept = type === "image" ? "image/*" : type === "video" ? "video/*" : "audio/*"; fileInput.click(); };
   const fileInput = document.createElement("input"); fileInput.type = "file"; fileInput.multiple = true; fileInput.accept = "image/*,video/*,audio/*"; fileInput.hidden = true;
@@ -501,6 +553,17 @@ function install(node) {
       const done = result => { media.remove(); resolve(Number.isFinite(result) ? result : null); };
       media.onloadedmetadata = () => done(media.duration);
       media.onerror = () => done(null);
+    });
+  }
+  async function probeDimensions(value, type) {
+    if (type !== "image" && type !== "video") return null;
+    const media = document.createElement(type === "video" ? "video" : "img");
+    media.preload = "metadata";
+    media.src = viewUrl(value);
+    return await new Promise(resolve => {
+      const done = () => { const width = type === "video" ? media.videoWidth : media.naturalWidth; const height = type === "video" ? media.videoHeight : media.naturalHeight; media.remove(); resolve(width > 0 && height > 0 ? { source_width: width, source_height: height } : null); };
+      if (type === "video") media.onloadedmetadata = done; else media.onload = done;
+      media.onerror = () => { media.remove(); resolve(null); };
     });
   }
   async function captureFirstFrame(videoUrl) {
@@ -535,18 +598,34 @@ function install(node) {
       mutate(s => { const item = s.items.find(x => x.id === id); if (item) item.waveform_peaks = peaks; });
     } catch (error) { console.warn("[MiniMax H3 Director] Audio waveform decode failed", error); }
   }
-  async function acceptFile(file, targetLane = null) { const type = mediaTypeFor(file); const validLane = targetLane === "visual" ? type === "image" || type === "video" : targetLane === "audio" ? type === "audio" : true; const modeSupportsType = !!type && allowsType(type); const lane = type === "audio" ? "audio" : "visual"; if (!type || !validLane || !modeSupportsType) { const requirement = mode() === "FL2VA" ? "FL2VA supports image references only; video and audio are unavailable." : targetLane ? `Drop ${targetLane === "audio" ? "audio" : "image or video"} files on this lane.` : "This media type is not available in the selected MiniMax mode."; setStatus(requirement, true); return; } if (count(state, type) >= MAX[type] || activeItems().length >= MAX.total) { setStatus(`Limit reached: ${MAX[type]} ${type}s / ${MAX.total} files.`, true); return; } const laneAvail = availableSlots(lane); const laneOccupied = new Set(activeItems().filter(x => laneForItem(x) === lane).map(x => x.slot).filter(Number.isInteger)); const laneFree = laneAvail.some(slot => !laneOccupied.has(slot)); if (!laneFree) { setStatus(`No free ${lane} slot is available.`, true); return; } try { const value = await uploadFile(file, status); const sourceDuration = await probeDuration(value, type); if (sourceDuration !== null && sourceDuration < 2) { setStatus(`${file.name}: MiniMax references must be at least 2 seconds.`, true); return; } const duration = sourceDuration === null ? null : Math.min(sourceDuration, 15); let thumbnail = null; if (type === "video") { thumbnail = await captureFirstFrame(viewUrl(value)); } const item = { type, value, thumbnail, ...(duration !== null ? { duration, source_duration: sourceDuration } : {}), ...((type === "video" || type === "audio") ? { trim_start: 0, trim_end: duration } : {}) }; addItem(item); const added = state.items[state.items.length - 1]; if (type === "audio") void extractWaveform(value, added.id); setStatus(sourceDuration > 15 ? `${file.name} added; cropped to the first 15 seconds.` : `${file.name} added.`); } catch (error) { setStatus(error.message, true); } }
+  async function acceptFile(file, targetLane = null) { const type = mediaTypeFor(file); const validLane = targetLane === "visual" ? type === "image" || type === "video" : targetLane === "audio" ? type === "audio" : true; const modeSupportsType = !!type && allowsType(type); const lane = type === "audio" ? "audio" : "visual"; if (!type || !validLane || !modeSupportsType) { const requirement = mode() === "FL2VA" ? "FL2VA supports image references only; video and audio are unavailable." : targetLane ? `Drop ${targetLane === "audio" ? "audio" : "image or video"} files on this lane.` : "This media type is not available in the selected MiniMax mode."; setStatus(requirement, true); return; } if (count(state, type) >= MAX[type] || activeItems().length >= MAX.total) { setStatus(`Limit reached: ${MAX[type]} ${type}s / ${MAX.total} files.`, true); return; } const laneAvail = availableSlots(lane); const laneOccupied = new Set(activeItems().filter(x => laneForItem(x) === lane).map(x => x.slot).filter(Number.isInteger)); const laneFree = laneAvail.some(slot => !laneOccupied.has(slot)); if (!laneFree) { setStatus(`No free ${lane} slot is available.`, true); return; } try { const value = await uploadFile(file, status); const [sourceDuration, dimensions] = await Promise.all([probeDuration(value, type), probeDimensions(value, type)]); if (sourceDuration !== null && sourceDuration < 2) { setStatus(`${file.name}: MiniMax references must be at least 2 seconds.`, true); return; } const duration = sourceDuration === null ? null : Math.min(sourceDuration, 15); let thumbnail = null; if (type === "video") { thumbnail = await captureFirstFrame(viewUrl(value)); } const item = { type, value, thumbnail, ...dimensions, ...(duration !== null ? { duration, source_duration: sourceDuration } : {}), ...((type === "video" || type === "audio") ? { trim_start: 0, trim_end: duration } : {}) }; addItem(item); applyResolution(); const added = state.items[state.items.length - 1]; if (type === "audio") void extractWaveform(value, added.id); setStatus(sourceDuration > 15 ? `${file.name} added; cropped to the first 15 seconds.` : `${file.name} added.`); } catch (error) { setStatus(error.message || "Upload failed", true); } }
   const render = () => {
     timeline.replaceChildren();
     const selected = state.items.find(item => item.id === selectedId);
     const modeGroup = document.createElement("div"); modeGroup.className = "ds-h3-mode-group"; modeGroup.style.display = "flex"; modeGroup.style.flexDirection = "column"; modeGroup.style.alignItems = "flex-start"; modeGroup.style.gap = "4px"; modeGroup.style.padding = "6px"; modeGroup.style.background = "#0d1217"; modeGroup.style.border = "1px solid #344452"; modeGroup.style.borderRadius = "6px";
-    const topRow = document.createElement("div"); topRow.className = "ds-h3-modebar"; topRow.style.flexWrap = "nowrap"; topRow.style.justifyContent = "space-between"; topRow.style.gap = "6px"; topRow.style.padding = "0"; topRow.style.border = "0"; topRow.style.background = "transparent";
-    const modesSide = document.createElement("span"); modesSide.className = "ds-h3-actions"; modesSide.style.gap = "4px"; ["T2VA", "I2VA", "FL2VA", "L2VA", "REF2VA"].forEach(value => { const button = document.createElement("button"); button.textContent = value; button.classList.toggle("active", mode() === value); button.onclick = () => { if (modeWidget) { modeWidget.value = value; modeWidget.callback?.(value); } if (selectedLane === "audio" && value !== "REF2VA") selectedLane = "visual"; render(); }; modesSide.append(button); });
-    const rightSide = document.createElement("span"); rightSide.className = "ds-h3-actions"; rightSide.style.gap = "4px"; const hasContent = state.items.length || state.prompt_blocks?.length || hasBuilderContent() || String(promptWidget?.value || "").trim(); if (hasContent) { const clearButton = document.createElement("button"); clearButton.className = "ds-h3-clear-btn"; clearButton.textContent = "Clear"; clearButton.title = "Remove all media and prompts"; clearButton.onclick = clearAll; rightSide.append(clearButton); } if (selected) { if (!isLockedSlot(selected)) { const removeButton = document.createElement("button"); removeButton.className = "ds-h3-remove-btn"; removeButton.textContent = "Remove"; removeButton.title = `Remove selected ${selected.type}`; removeButton.onclick = () => remove(selected.id); rightSide.append(removeButton); } else { setStatus(`${mediaReferenceName(selected.type)} ${selected.slot + 1} is locked in L2VA mode`, true); } } const docsButton = document.createElement("button"); docsButton.className = "ds-h3-docs"; docsButton.textContent = "?"; docsButton.title = "Open MiniMax H3 Director documentation on GitHub"; docsButton.onclick = () => window.open(REPOSITORY_URL, "_blank", "noopener,noreferrer"); rightSide.append(docsButton);
-    const styleButton = document.createElement("button"); styleButton.className = "ds-h3-prompt-mode-btn"; const styleLabel = promptStyle(); styleButton.textContent = `Prompt: ${styleLabel === "simple" ? "Simple" : "Structured"}`; styleButton.title = "Toggle between one free-text prompt and the structured builder"; styleButton.onclick = () => { if (styleLabel !== "simple") builderState.simple_prompt = previewTextFor(mode(), false); builderState.prompt_mode = styleLabel === "simple" ? "structured" : "simple"; emit(); render(); }; rightSide.append(styleButton);
-    topRow.append(modesSide, rightSide); modeGroup.append(topRow);
+    const topRow = document.createElement("div"); topRow.className = "ds-h3-modebar"; topRow.style.flexWrap = "nowrap"; topRow.style.gap = "8px"; topRow.style.padding = "0"; topRow.style.border = "0"; topRow.style.background = "transparent"; topRow.style.width = "100%";
+    const controlGroup = () => { const group = document.createElement("span"); group.className = "ds-h3-actions"; group.style.cssText = "gap:4px;flex-wrap:nowrap;white-space:nowrap"; return group; };
+    const modesSide = controlGroup(); const modeLabel = document.createElement("span"); modeLabel.textContent = "Mode:"; modeLabel.style.cssText = "color:#9fb3c2;font-weight:600"; modesSide.append(modeLabel); ["T2VA", "I2VA", "FL2VA", "L2VA", "REF2VA"].forEach(value => { const button = document.createElement("button"); button.textContent = value; button.classList.toggle("active", mode() === value); button.onclick = () => { if (modeWidget) { modeWidget.value = value; modeWidget.callback?.(value); } if (selectedLane === "audio" && value !== "REF2VA") selectedLane = "visual"; render(); }; modesSide.append(button); });
+    const promptSide = controlGroup(); promptSide.style.cssText += ";padding-left:8px;border-left:1px solid #344452"; const promptLabel = document.createElement("span"); promptLabel.textContent = "Prompt Mode:"; promptLabel.style.cssText = "color:#9fb3c2;font-weight:600"; promptSide.append(promptLabel); const styleLabel = promptStyle(); [["simple", "Simple"], ["structured", "Structured"]].forEach(([value, label]) => { const promptButton = document.createElement("button"); promptButton.className = "ds-h3-prompt-mode-btn"; promptButton.textContent = label; promptButton.classList.toggle("active", styleLabel === value); promptButton.style.cssText = styleLabel === value ? "background:rgba(126,235,167,.28)!important;color:#d7ffe3!important;border-color:rgba(126,235,167,.9)!important;box-shadow:0 0 8px rgba(126,235,167,.45)" : "background:rgba(126,235,167,.08)!important;color:#bff3d0!important;border-color:rgba(126,235,167,.4)!important"; promptButton.title = `Use the ${label.toLowerCase()} prompt editor`; promptButton.onclick = () => { if (styleLabel === value) return; if (value === "simple") builderState.simple_prompt = previewTextFor(mode(), false); builderState.prompt_mode = value; emit(); render(); }; promptSide.append(promptButton); });
+    const actionsSide = controlGroup(); actionsSide.style.cssText += ";padding-left:8px;border-left:1px solid #344452"; const hasContent = state.items.length || state.prompt_blocks?.length || hasBuilderContent() || String(promptWidget?.value || "").trim(); if (selected) { if (!isLockedSlot(selected)) { const removeButton = document.createElement("button"); removeButton.className = "ds-h3-remove-btn"; removeButton.textContent = "Remove"; removeButton.title = `Remove selected ${selected.type}`; removeButton.onclick = () => remove(selected.id); actionsSide.append(removeButton); } else { setStatus(`${mediaReferenceName(selected.type)} ${selected.slot + 1} is locked in L2VA mode`, true); } } if (hasContent) { const clearButton = document.createElement("button"); clearButton.className = "ds-h3-clear-btn"; clearButton.textContent = "Clear"; clearButton.title = "Remove all media and prompts"; clearButton.onclick = clearAll; actionsSide.append(clearButton); }
+    const spacer = document.createElement("span"); spacer.style.flex = "1";
+    const docsButton = document.createElement("button"); docsButton.className = "ds-h3-docs"; docsButton.textContent = "?"; docsButton.title = "Open MiniMax H3 Director documentation on GitHub"; docsButton.onclick = () => window.open(REPOSITORY_URL, "_blank", "noopener,noreferrer");
+    topRow.append(modesSide, promptSide, actionsSide, spacer, docsButton); modeGroup.append(topRow);
     const modeHint = { T2VA: "T2VA · no input frame", I2VA: "I2VA · one opening-frame slot", FL2VA: "FL2VA · opening and closing-frame slots", L2VA: "L2VA · one closing-frame slot" }; const hint = document.createElement("div"); hint.className = "ds-h3-mode-hint"; hint.style.fontSize = "11px"; hint.style.color = "#9fb3c2"; hint.style.margin = "0"; hint.textContent = modeHint[mode()] || `REF2VA · up to ${MAX.image} image, ${MAX.video} video, and ${MAX.audio} audio slots · ${MAX.total} combined files maximum`; modeGroup.append(hint);
     timeline.append(modeGroup);
+
+    const resolutionPanel = document.createElement("div"); resolutionPanel.className = "ds-h3-resolution-panel"; resolutionPanel.style.cssText = "width:100%;box-sizing:border-box;display:flex;flex-wrap:wrap;align-items:end;gap:6px;padding:7px;margin-top:6px;background:#0d1217;border:1px solid #344452;border-radius:6px";
+    const settings = resolutionState(); const externalCanvas = hasExternalCanvas(); const currentCanvas = externalCanvas ? ["external", "external"] : (resolveCanvas(settings) || [Number(widthWidget?.value) || 1344, Number(heightWidget?.value) || 768]);
+    const updateResolution = patch => mutate(s => { s.resolution = { ...resolutionState(), ...patch }; });
+    const addSelect = (label, value, options, onChange, aspectChoices = false) => { const field = document.createElement("label"); field.style.cssText = "display:flex;flex-direction:column;gap:3px;font-size:10px;color:#9fb3c2;min-width:150px"; field.textContent = label; const select = document.createElement("select"); select.className = "ds-h3-resolution-select"; options.forEach(([id, text]) => { const option = document.createElement("option"); option.value = id; option.textContent = aspectChoices && id.includes(":") ? `▭ ${text}` : text; select.append(option); }); select.value = value; select.oninput = event => onChange(event.target.value); select.onchange = event => onChange(event.target.value); field.append(select); resolutionPanel.append(field); };
+    const disableWhenExternal = () => { if (externalCanvas) resolutionPanel.querySelectorAll("select,input").forEach(control => { control.disabled = true; }); };
+    addSelect("ASPECT", settings.aspect, ASPECT_OPTIONS, aspect => updateResolution({ aspect }), true);
+    addSelect("RESOLUTION", settings.resolution, [["auto", "Auto · short side 768 px"], ...Object.keys(RESOLUTION_PRESETS).map(name => [name, name]), ["custom", "CUSTOM"]], resolution => updateResolution({ resolution }));
+    addSelect("INPUT SCALING", settings.input_scaling, [["Off", "Off"], ["Auto", "Auto · short edge 2048 px"], ["Target", "Target · Selected Aspect & Resolution"], ["Fit", "Fit"], ["Fill and crop", "Fill and crop"], ["Fit and pad", "Fit and pad"], ["Long side with divisible crop", "Long side with divisible crop"]], input_scaling => updateResolution({ input_scaling }));
+    if (settings.aspect === "custom") { for (const [name, key] of [["W", "custom_aspect_w"], ["H", "custom_aspect_h"]]) { const field = document.createElement("label"); field.style.cssText = "display:flex;flex-direction:column;gap:3px;font-size:10px;color:#9fb3c2;width:56px"; field.textContent = `RATIO ${name}`; const input = document.createElement("input"); input.type = "number"; input.min = "1"; input.step = "1"; input.value = settings[key]; input.onchange = event => updateResolution({ [key]: Math.max(1, Number(event.target.value) || 1) }); field.append(input); resolutionPanel.append(field); } }
+    if (settings.resolution === "custom") { addSelect("CUSTOM", settings.custom_mode || "mp", [["mp", "Megapixels"], ["fixed", "Fixed pixels"]], custom_mode => updateResolution({ custom_mode })); const customKey = (settings.custom_mode || "mp") === "mp" ? "custom_mp" : "custom_width"; if (customKey === "custom_mp") { const field = document.createElement("label"); field.style.cssText = "display:flex;flex-direction:column;gap:3px;font-size:10px;color:#9fb3c2;width:76px"; field.textContent = "MP"; const input = document.createElement("input"); input.type = "number"; input.min = ".01"; input.step = ".01"; input.value = settings.custom_mp; input.onchange = event => updateResolution({ custom_mp: Number(event.target.value) || settings.custom_mp }); field.append(input); resolutionPanel.append(field); } else { const dimensions = document.createElement("div"); dimensions.className = "ds-h3-fixed-dimensions"; dimensions.style.cssText = "display:flex;gap:6px;align-items:end"; const dimensionField = (label, value, onChange) => { const field = document.createElement("label"); field.style.cssText = "display:flex;flex-direction:column;gap:3px;font-size:10px;color:#9fb3c2;width:76px"; field.textContent = label; const input = document.createElement("input"); input.type = "number"; input.min = "16"; input.step = "16"; input.value = value; input.onchange = event => onChange(Number(event.target.value) || value); field.append(input); return field; }; const widthField = dimensionField("WIDTH", settings.custom_width, custom_width => updateResolution({ custom_width })); const heightField = dimensionField("HEIGHT", settings.custom_height, custom_height => updateResolution({ custom_height })); dimensions.append(widthField, heightField); resolutionPanel.append(dimensions); } }
+    disableWhenExternal();
+    const readout = document.createElement("span"); readout.style.cssText = "margin-left:auto;font-size:11px;color:#7ee19d;white-space:nowrap"; readout.textContent = externalCanvas ? "External width/height overwrite · Director sizing and input scaling disabled" : `${settings.aspect === "auto" ? "Auto aspect" : settings.aspect} · ${settings.resolution === "auto" ? "Auto 768px" : settings.resolution} · ${currentCanvas[0]} × ${currentCanvas[1]} · 16px`; resolutionPanel.append(readout); timeline.append(resolutionPanel);
 
     const lengthWidget = node.widgets?.find(w => w.name === "duration"); const timelineSeconds = Math.max(1, Number(lengthWidget?.value) || 5); lastTimelineLength = timelineSeconds;
 
@@ -651,6 +730,11 @@ function install(node) {
       lastExternalPromptLinked = linked;
       requestAnimationFrame(render);
     }
+    const externalCanvasLinked = hasExternalCanvas();
+    if (externalCanvasLinked !== lastExternalCanvasLinked) {
+      lastExternalCanvasLinked = externalCanvasLinked;
+      requestAnimationFrame(render);
+    }
   };
   node.__dasiwaH3RestorePersistedState = () => requestAnimationFrame(restorePersistedState);
   node.__dasiwaH3State = () => state; node.__dasiwaH3Render = render;
@@ -666,6 +750,11 @@ function install(node) {
     const linked = hasExternalPrompt();
     if (linked !== lastExternalPromptLinked) {
       lastExternalPromptLinked = linked;
+      render();
+    }
+    const externalCanvasLinked = hasExternalCanvas();
+    if (externalCanvasLinked !== lastExternalCanvasLinked) {
+      lastExternalCanvasLinked = externalCanvasLinked;
       render();
     }
   }, 300);

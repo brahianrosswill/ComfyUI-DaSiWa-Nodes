@@ -5,16 +5,17 @@ regression-tested from a source checkout.
 """
 from dataclasses import dataclass
 from typing import Any
-import math
 import os
 
 import numpy as np
 import torch
 from PIL import Image
 
+from .nodes_scaling import DaSiWa_TorchResize
+
 FPS = 24
 AUDIO_LATENT_FPS = 40
-CANVAS_MULTIPLE = 32
+CANVAS_MULTIPLE = 16
 BASE_SHORT_EDGE = 768
 MAX_PIXELS = 768 * 1344
 REF_IMAGE_SHORT_EDGE = 2048
@@ -62,20 +63,45 @@ def temporal_shape(length: int) -> tuple[int, int, int]:
 
 
 def adapt_canvas(width: int, height: int) -> tuple[int, int]:
+    return scale_canvas_to_short_edge(width, height)
+
+
+def scale_canvas_to_short_edge(width: int, height: int, short_edge: int = BASE_SHORT_EDGE) -> tuple[int, int]:
+    """Preserve a source aspect while setting its shorter output side for H3."""
     if width <= 0 or height <= 0:
         raise ValueError("reference dimensions must be positive")
-    ratio = width / height
-    if ratio >= 1:
-        nom_w, nom_h = BASE_SHORT_EDGE * ratio, BASE_SHORT_EDGE
-    else:
-        nom_w, nom_h = BASE_SHORT_EDGE, BASE_SHORT_EDGE / ratio
-    if nom_w * nom_h > MAX_PIXELS:
-        scale = math.sqrt(MAX_PIXELS / (nom_w * nom_h))
-        nom_w, nom_h = nom_w * scale, nom_h * scale
+    scale = float(short_edge) / min(width, height)
+    scaled_width, scaled_height = width * scale, height * scale
     return (
-        max(CANVAS_MULTIPLE, round(nom_w / CANVAS_MULTIPLE) * CANVAS_MULTIPLE),
-        max(CANVAS_MULTIPLE, round(nom_h / CANVAS_MULTIPLE) * CANVAS_MULTIPLE),
+        max(CANVAS_MULTIPLE, round(scaled_width / CANVAS_MULTIPLE) * CANVAS_MULTIPLE),
+        max(CANVAS_MULTIPLE, round(scaled_height / CANVAS_MULTIPLE) * CANVAS_MULTIPLE),
     )
+
+
+INPUT_SCALING_MODES = ("Off", "Auto", "Target", "Fit", "Fill and crop", "Fit and pad", "Long side with divisible crop")
+
+
+def scale_input_media(image, behavior: str, target_width: int, target_height: int):
+    """Apply Director input preprocessing through the existing DaSiWa Torch Resize node."""
+    behavior = str(behavior or "Off")
+    if behavior not in INPUT_SCALING_MODES:
+        raise ValueError(f"unsupported MiniMax Director input scaling behavior: {behavior}")
+    if behavior == "Off":
+        return image
+    if not hasattr(image, "shape") or len(image.shape) != 4:
+        return image
+    resize = DaSiWa_TorchResize()
+    if behavior == "Auto":
+        source_short_edge = min(int(image.shape[1]), int(image.shape[2]))
+        if source_short_edge <= REF_IMAGE_SHORT_EDGE:
+            return image
+        return resize.resize(image, "Multiplier", "Fit", target_width, target_height,
+                             REF_IMAGE_SHORT_EDGE / source_short_edge, "Lanczos", True,
+                             CANVAS_MULTIPLE, "0, 0, 0", "center", 0, 16.0, 64)[0]
+    aspect_mode = "Stretch" if behavior == "Target" else behavior
+    return resize.resize(image, "Target resolution", aspect_mode, target_width, target_height,
+                         1.0, "Lanczos", True, CANVAS_MULTIPLE, "0, 0, 0", "center",
+                         0, 16.0, 64)[0]
 
 
 def assemble_prompt(prompt: str = "", prompt_blocks=None) -> str:

@@ -20,7 +20,8 @@ Timeline-based authoring for MiniMax H3 text/image/video generation and referenc
   - REF2VA: simplified six-section free-text builder (subject_definitions, summary, retention_analysis, detailed_description, overall_soundscape, non_diegetic_music) with helper buttons: **Insert [Shot N]** places shot markers at cursor, **Prefill Labels & Summary** auto-generates Picture/Video/Audio labels from your inserted media, and **Preview Prompt** shows the exact assembled prompt in a popup with copy-to-clipboard.
 - **VALIDATED LIMITS:** 2–15 second reference windows; max 15s combined visual and audio duration each; strict path-safety under ComfyUI's input directory.
 - **NATIVE ROUTING & LAZY LOADING:** hands validated data to ComfyUI's built-in MiniMaxH3ImageToVideo / MiniMaxH3ReferenceToVideo nodes; only the selected FL2VA or REF2VA model is requested.
-- **EXTERNAL PROMPT INPUT:** optional `external_prompt` (STRING) input — when connected and non-empty it overrides the assembled builder output, so you can feed a fully hand-written prompt from any upstream node.
+- **RESOLUTION PANEL:** Aspect / Resolution / Input scaling selectors (all default to **Auto**) drive the output canvas on MiniMax's 16-px grid — Auto aspect follows your first visual reference, Auto resolution sets a 768 px short side, plus fixed aspect, MP and pixel presets with CUSTOM values. Input scaling (Off / Auto / Target / Fit / Fill / Fit+pad / Divisible crop) preprocesses visual references via the included Torch Resize before they reach H3.
+- **EXTERNAL OVERWRITE INPUTS:** optional `external_prompt_overwrite` (STRING) replaces the assembled builder output; connect both `external_width_overwrite` and `external_height_overwrite` (INT) to replace the Director canvas and bypass its sizing and input preprocessing entirely.
 
 [Full documentation, UI guide, and prompting reference →](docs/minimax_h3_director.md)
 

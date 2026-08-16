@@ -7,7 +7,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from nodes.helper_minimax_h3_director import audio_duration, load_audio, load_embedded_video_audio, load_video
+from nodes.helper_minimax_h3_director import (
+    audio_duration, load_audio, load_embedded_video_audio, load_video,
+    scale_canvas_to_short_edge, scale_input_media,
+)
 from nodes.helper_minimax_h3_prompt_builder import (
     PROMPT_MODES, build_base_prompt, build_prompt, build_ref_prompt, default_builder_state,
 )
@@ -25,6 +28,28 @@ def test_base_prompt_builder_includes_fl2va_alignment_and_schema():
     assert "Picture 2 (from Shot 2) aligns with the 5.17-second mark" in prompt
     assert "integrated_multimodal_description: [Shot 1] A lantern rises." in prompt
     assert "overall_soundscape: wind" in prompt
+
+
+def test_minimax_auto_canvas_sets_the_short_edge_to_768_on_a_16_pixel_grid():
+    assert scale_canvas_to_short_edge(1920, 1080) == (1360, 768)
+    assert scale_canvas_to_short_edge(1080, 1920) == (768, 1360)
+    assert scale_canvas_to_short_edge(1024, 1024) == (768, 768)
+
+
+def test_director_input_scaling_reuses_torch_resize_without_upscaling_auto_inputs():
+    torch = __import__("torch")
+    image = torch.zeros((1, 3000, 6000, 3))
+    small_image = torch.zeros((1, 100, 200, 3))
+
+    auto = scale_input_media(image, "Auto", 1024, 768)
+    small_auto = scale_input_media(small_image, "Auto", 1024, 768)
+    target = scale_input_media(image, "Target", 1024, 768)
+    off = scale_input_media(image, "Off", 1024, 768)
+
+    assert auto.shape == (1, 2048, 4096, 3)
+    assert small_auto is small_image
+    assert target.shape == (1, 768, 1024, 3)
+    assert off is image
 
 
 def test_ref_prompt_builder_emits_all_required_sections():
@@ -92,6 +117,28 @@ def test_director_blank_external_prompt_falls_back_to_builder():
 
     # A real external prompt still overrides the builder.
     assert resolved_for("MY OWN PROMPT") == "MY OWN PROMPT"
+
+
+def test_director_external_dimension_overwrites_replace_canvas_before_guide_construction():
+    guide, _, resolved, output_width, output_height, *_ = director.MiniMaxH3Director().build_guide(
+        "I2VA", "internal prompt", 1344, 768, 5, "match",
+        json.dumps({"items": [{"type": "image", "value": "opening.png", "slot": 0}]}),
+        external_width_overwrite=1023,
+        external_height_overwrite=577,
+        external_prompt_overwrite="external prompt",
+    )
+
+    assert (output_width, output_height) == (1023, 577)
+    assert (guide["width"], guide["height"]) == (1023, 577)
+    assert resolved == "external prompt"
+
+
+def test_director_external_dimension_overwrites_require_a_complete_pair():
+    with pytest.raises(ValueError, match="both external width overwrite and external height overwrite"):
+        director.MiniMaxH3Director().build_guide(
+            "T2VA", "", 1344, 768, 5, "match", json.dumps({"items": []}),
+            external_width_overwrite=1024,
+        )
 
 
 def test_prompt_modes_constant_lists_both_styles():
