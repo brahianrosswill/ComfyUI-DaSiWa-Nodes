@@ -3,9 +3,9 @@ import { api } from "../../../scripts/api.js";
 
 const DEFAULT_BUILDER_STATE = mode => {
   if (mode === "REF2VA") {
-    return { version: 2, mode: "REF2VA", duration: 5, ref: { subject_definitions: "", summary: "", retention_analysis: "", detailed_description: "", soundscape: "", music: "N/A" } };
+    return { version: 2, mode: "REF2VA", duration: 5, ref: { subject_definitions: "", summary: "", retention_analysis: "", detailed_description: "", soundscape: "", music: "" } };
   }
-  return { version: 1, mode: mode || "FL2VA", imd: "", soundscape: "", music: "N/A", duration: 5, ref: { subject_defs: [], summary_types: ["reference generation"], summary_text: "", retention: [], style_line: "", detail: "", soundscape: "", music: "N/A" } };
+  return { version: 1, mode: mode || "FL2VA", imd: "", soundscape: "", music: "", duration: 5, ref: { subject_defs: [], summary_types: ["reference generation"], summary_text: "", retention: [], style_line: "", detail: "", soundscape: "", music: "" } };
 };
 const TASK_TYPES_JS = ["keyframe completion","reference generation","video editing","video continuation","audio reuse","audio reference"];
 const VISUAL_MARKERS_JS = ["fully_preserved","partially_preserved","attribute_transfer","weak_reference"];
@@ -149,6 +149,9 @@ function install(node) {
   const mode = () => node.widgets?.find(w => w.name === "mode")?.value || "FL2VA";
   let builderState = state.builder_state && typeof state.builder_state === "object" ? { ...DEFAULT_BUILDER_STATE(mode()), ...state.builder_state, ref: { ...DEFAULT_BUILDER_STATE(mode()).ref, ...(state.builder_state.ref || {}) } } : DEFAULT_BUILDER_STATE(mode());
   builderState.mode = mode();
+  const isNaSentinel = v => typeof v === "string" && v.trim() === "N/A";
+  if (isNaSentinel(builderState.music)) builderState.music = "";
+  if (builderState.ref && isNaSentinel(builderState.ref.music)) builderState.ref.music = "";
   const builderWidget = node.widgets?.find(w => w.name === "builder_state");
   if (builderWidget) { builderWidget.hidden = true; builderWidget.draw = () => {}; builderWidget.computeSize = () => [0, -4]; }
   const modeWidget = node.widgets?.find(w => w.name === "mode");

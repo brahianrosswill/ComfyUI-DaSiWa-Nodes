@@ -70,7 +70,7 @@ def default_builder_state(mode: str = "T2VA") -> dict:
                 "retention_analysis": "",
                 "detailed_description": "",
                 "soundscape": "",
-                "music": "N/A",
+                "music": "",
             },
         }
     return {
@@ -78,7 +78,7 @@ def default_builder_state(mode: str = "T2VA") -> dict:
         "mode": mode,
         "imd": "",
         "soundscape": "",
-        "music": "N/A",
+        "music": "",
         "duration": 5,
         "ref": {
             "subject_defs": [],
@@ -88,7 +88,7 @@ def default_builder_state(mode: str = "T2VA") -> dict:
             "style_line": "",
             "detail": "",
             "soundscape": "",
-            "music": "N/A",
+            "music": "",
         },
     }
 
@@ -100,7 +100,7 @@ def _base_field_values(state: dict) -> dict:
     soundscape_raw = state.get("soundscape")
     soundscape = soundscape_raw.strip() if isinstance(soundscape_raw, str) else ""
     music_raw = state.get("music")
-    music = music_raw.strip() if isinstance(music_raw, str) else "N/A"
+    music = (music_raw.strip() if isinstance(music_raw, str) else "") or "N/A"
     return {"imd": imd, "soundscape": soundscape, "music": music}
 
 
@@ -177,7 +177,7 @@ def _ref_field_values(state: dict) -> dict:
 
     soundscape = _ensure_str(ref.get("soundscape"))
     music_raw = ref.get("music")
-    music = music_raw.strip() if isinstance(music_raw, str) else "N/A"
+    music = (music_raw.strip() if isinstance(music_raw, str) else "") or "N/A"
 
     return {
         "subject_definitions": subject_definitions,
