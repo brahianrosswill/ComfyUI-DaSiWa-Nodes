@@ -51,6 +51,23 @@ function installStyles() {
 }
 
 function parseState(value) { try { const s = JSON.parse(value || "{}"); return { ...DEFAULT_STATE, ...s, items: Array.isArray(s.items) ? s.items : [], prompt_blocks: Array.isArray(s.prompt_blocks) ? s.prompt_blocks : [] }; } catch { return structuredClone(DEFAULT_STATE); } }
+function textValue(value) { return typeof value === "string" ? value.trim() : ""; }
+function builderHasContent(builder) {
+  if (!builder || typeof builder !== "object") return false;
+  if (textValue(builder.simple_prompt) || textValue(builder.imd) || textValue(builder.soundscape)) return true;
+  const ref = builder.ref;
+  return !!(ref && typeof ref === "object" && (
+    ["subject_definitions", "summary", "retention_analysis", "detailed_description", "soundscape"].some(key => textValue(ref[key])) ||
+    (Array.isArray(ref.subject_defs) && ref.subject_defs.length) ||
+    (Array.isArray(ref.retention) && ref.retention.length)
+  ));
+}
+function legacyPrompt(state, widgetPrompt) {
+  for (const candidate of [state?.resolved_prompt, state?.full_prompt]) if (textValue(candidate)) return textValue(candidate);
+  const global = textValue(widgetPrompt) || textValue(state?.prompt);
+  const blocks = Array.isArray(state?.prompt_blocks) ? [...state.prompt_blocks].sort((a, b) => (Number(a?.start) || 0) - (Number(b?.start) || 0) || (Number(a?.order) || 0) - (Number(b?.order) || 0)) : [];
+  return [global, ...blocks.filter(block => block?.enabled !== false).map(block => textValue(block?.text)).filter(Boolean)].filter(Boolean).join("\n");
+}
 function viewUrl(path) { return api.apiURL(`/view?filename=${encodeURIComponent(path)}&type=input`); }
 function count(state, type) { return state.items.filter(i => i.enabled !== false && i.type === type).length; }
 function idFor(type, n) { return `${type}-${Date.now()}-${n}`; }
@@ -833,6 +850,17 @@ function install(node) {
     } else {
       builderState = baseDefaults;
       builderState.mode = m;
+    }
+    // Workflows created before the builder stored complex text in the ordinary
+    // prompt widget/timeline payload. Keep that exact text editable and queue
+    // it unchanged instead of replacing it with blank structured fields.
+    if (!builderHasContent(builderState)) {
+      const preserved = legacyPrompt(state, promptWidget?.value);
+      if (preserved) {
+        builderState.prompt_mode = "simple";
+        builderState.simple_prompt = preserved;
+        emit();
+      }
     }
     syncNodeBounds();
     render();

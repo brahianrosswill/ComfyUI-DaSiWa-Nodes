@@ -8,7 +8,8 @@ from .helper_minimax_h3_director import (
     scale_input_media, validate_reference_limits,
 )
 from .helper_minimax_h3_prompt_builder import (
-    build_prompt, default_builder_state, normalize_ref_schema, validate_builder_state,
+    build_prompt, default_builder_state, migrate_legacy_prompt, normalize_ref_schema,
+    validate_builder_state,
 )
 
 BASE_MODES = {"T2VA", "I2VA", "FL2VA", "L2VA"}
@@ -99,6 +100,7 @@ class MiniMaxH3Director:
         normalize_ref_schema(merged["ref"])
         merged["mode"] = mode
         merged["duration"] = duration
+        migrated_legacy_prompt = migrate_legacy_prompt(merged, state, prompt)
 
         items = sorted(enumerate(state.get("items", [])), key=lambda pair: (int(pair[1].get("order", pair[0])), pair[0]))
         items = [pair for pair in items if pair[1].get("enabled", True)]
@@ -182,7 +184,7 @@ class MiniMaxH3Director:
         else:
             resolved = build_prompt(merged)
             if not any(str(merged.get(key) or "").strip() for key in ("imd", "soundscape")) and mode != "REF2VA":
-                resolved = assemble_prompt(prompt, blocks)
+                resolved = build_prompt(merged) if migrated_legacy_prompt else assemble_prompt(prompt, blocks)
         for issue in validate_builder_state(merged):
             log_dasiwa("MiniMax H3 Director", f"[{issue['level'].upper()}] {issue['msg']}")
         guide = {

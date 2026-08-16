@@ -249,6 +249,62 @@ def _build_simple_prompt(state: dict) -> str:
     return "\n".join(lines)
 
 
+def has_builder_content(state: dict) -> bool:
+    """Return whether a builder state contains an authored prompt.
+
+    Empty default fields (including the assembly-time ``N/A`` music fallback)
+    must not prevent a pre-builder Director prompt from being migrated.
+    """
+    if not isinstance(state, dict):
+        return False
+    if _ensure_str(state.get("simple_prompt")):
+        return True
+    if _ensure_str(state.get("imd")) or _ensure_str(state.get("soundscape")):
+        return True
+    ref = state.get("ref")
+    if not isinstance(ref, dict):
+        return False
+    return any(_ensure_str(ref.get(key)) for key in (
+        "subject_definitions", "summary", "retention_analysis",
+        "detailed_description", "soundscape",
+    )) or bool(ref.get("subject_defs")) or bool(ref.get("retention"))
+
+
+def migrate_legacy_prompt(builder: dict, timeline_state: dict, widget_prompt: object = "") -> bool:
+    """Preserve old Director prompts as a lossless Simple prompt.
+
+    Earlier Director revisions stored the editable prompt in the normal prompt
+    widget or timeline JSON, before ``builder_state`` existed.  Prefer the
+    previously resolved text because it is the exact generation prompt; fall
+    back to the old global prompt plus ordered prompt blocks.  Existing builder
+    content always wins, so loading a current workflow is idempotent.
+    """
+    if not isinstance(builder, dict) or has_builder_content(builder):
+        return False
+    state = timeline_state if isinstance(timeline_state, dict) else {}
+    candidates = [state.get("resolved_prompt"), state.get("full_prompt")]
+    legacy_global = widget_prompt if _ensure_str(widget_prompt) else state.get("prompt")
+    raw_blocks = state.get("prompt_blocks")
+    blocks = raw_blocks if isinstance(raw_blocks, list) else []
+    ordered_blocks = sorted(enumerate(blocks), key=lambda pair: (
+        float(pair[1].get("start", 0)) if isinstance(pair[1], dict) else 0,
+        int(pair[1].get("order", pair[0])) if isinstance(pair[1], dict) else pair[0],
+        pair[0],
+    ))
+    candidates.append("\n".join([
+        _ensure_str(legacy_global),
+        *[_ensure_str(block.get("text")) for _, block in ordered_blocks
+          if isinstance(block, dict) and block.get("enabled", True)],
+    ]))
+    for candidate in candidates:
+        text = _ensure_str(candidate)
+        if text:
+            builder["prompt_mode"] = "simple"
+            builder["simple_prompt"] = text
+            return True
+    return False
+
+
 def build_prompt(state: dict) -> str:
     """Mode-dispatched prompt assembly honoring the requested style.
 
