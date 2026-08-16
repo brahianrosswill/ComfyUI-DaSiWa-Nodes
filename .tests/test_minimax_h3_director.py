@@ -298,6 +298,16 @@ def test_director_dom_ui_forwards_wheel_events_to_the_comfyui_canvas():
     assert 'canvas.dispatchEvent(new WheelEvent("wheel", {' in source
 
 
+def test_director_paste_replaces_selected_media_without_changing_its_slot():
+    source = Path("js/minimax_h3_director.js").read_text()
+
+    assert "const replacementFile = files.find(file =>" in source
+    assert "await replaceSelectedFile(replacementFile, selected);" in source
+    assert "async function replaceSelectedFile(file, selected)" in source
+    assert "laneForItem(selected) !== lane" in source
+    assert "s.items[index] = item" in source
+
+
 def test_director_uses_the_native_h3_frame_grid_for_guide_and_output_length():
     guide, output_length, *_ = director.MiniMaxH3Director().build_guide(
         "FL2VA", "overall_soundscape: quiet room tone", 1344, 768, 5, "match", "{}"

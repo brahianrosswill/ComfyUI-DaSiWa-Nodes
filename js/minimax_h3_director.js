@@ -551,6 +551,15 @@ function install(node) {
     if (!files.length) files.push(...[...(event.clipboardData?.items || [])].filter(item => item.kind === "file").map(item => item.getAsFile()).filter(Boolean));
     if (!files.length) return;
     event.preventDefault(); event.stopPropagation();
+    const selected = state.items.find(item => item.id === selectedId);
+    if (selected) {
+      const replacementFile = files.find(file => { const type = mediaTypeFor(file); return type && allowsType(type) && laneForItem(selected) === (type === "audio" ? "audio" : "visual"); });
+      if (replacementFile) {
+        if (isLockedSlot(selected)) { setStatus(`${mediaReferenceName(selected.type)} ${selected.slot + 1} is locked in L2VA mode`, true); return; }
+        await replaceSelectedFile(replacementFile, selected);
+        return;
+      }
+    }
     if (mode() === "FL2VA" && selectedLane === "audio") { setStatus("FL2VA supports image references only; select the Image/Video lane.", true); return; }
     setStatus(`Pasting ${files.length} file${files.length === 1 ? "" : "s"} into the ${selectedLane === "audio" ? "Audio" : "Image/Video"} lane.`);
     for (const file of files) await acceptFile(file, selectedLane);
@@ -608,6 +617,24 @@ function install(node) {
       audioContext.close?.();
       mutate(s => { const item = s.items.find(x => x.id === id); if (item) item.waveform_peaks = peaks; });
     } catch (error) { console.warn("[MiniMax H3 Director] Audio waveform decode failed", error); }
+  }
+  async function replaceSelectedFile(file, selected) {
+    const type = mediaTypeFor(file);
+    const lane = type === "audio" ? "audio" : "visual";
+    if (!type || !allowsType(type) || laneForItem(selected) !== lane) { setStatus(`Paste a compatible ${laneForItem(selected) === "audio" ? "audio" : "image or video"} file to replace the selected media.`, true); return; }
+    if (count(state, type) - (selected.type === type ? 1 : 0) >= MAX[type]) { setStatus(`Limit reached: ${MAX[type]} ${type}s.`, true); return; }
+    try {
+      const value = await uploadFile(file, status);
+      const [sourceDuration, dimensions] = await Promise.all([probeDuration(value, type), probeDimensions(value, type)]);
+      if (sourceDuration !== null && sourceDuration < 2) { setStatus(`${file.name}: MiniMax references must be at least 2 seconds.`, true); return; }
+      const duration = sourceDuration === null ? null : Math.min(sourceDuration, 15);
+      const thumbnail = type === "video" ? await captureFirstFrame(viewUrl(value)) : null;
+      const { thumbnail: oldThumbnail, source_width, source_height, duration: oldDuration, source_duration, trim_start, trim_end, waveform_peaks, ...stable } = selected;
+      const item = { ...stable, type, value, thumbnail, ...dimensions, ...(duration !== null ? { duration, source_duration: sourceDuration } : {}), ...((type === "video" || type === "audio") ? { trim_start: 0, trim_end: duration } : {}) };
+      mutate(s => { const index = s.items.findIndex(existing => existing.id === selected.id); if (index >= 0) s.items[index] = item; });
+      setStatus(`Replaced selected ${mediaReferenceName(type)}.`);
+      if (type === "audio") void extractWaveform(value, selected.id);
+    } catch (error) { console.error(error); setStatus(`Upload failed: ${error.message || error}`, true); }
   }
   async function acceptFile(file, targetLane = null) { const type = mediaTypeFor(file); const validLane = targetLane === "visual" ? type === "image" || type === "video" : targetLane === "audio" ? type === "audio" : true; const modeSupportsType = !!type && allowsType(type); const lane = type === "audio" ? "audio" : "visual"; if (!type || !validLane || !modeSupportsType) { const requirement = mode() === "FL2VA" ? "FL2VA supports image references only; video and audio are unavailable." : targetLane ? `Drop ${targetLane === "audio" ? "audio" : "image or video"} files on this lane.` : "This media type is not available in the selected MiniMax mode."; setStatus(requirement, true); return; } if (count(state, type) >= MAX[type] || activeItems().length >= MAX.total) { setStatus(`Limit reached: ${MAX[type]} ${type}s / ${MAX.total} files.`, true); return; } const laneAvail = availableSlots(lane); const laneOccupied = new Set(activeItems().filter(x => laneForItem(x) === lane).map(x => x.slot).filter(Number.isInteger)); const laneFree = laneAvail.some(slot => !laneOccupied.has(slot)); if (!laneFree) { setStatus(`No free ${lane} slot is available.`, true); return; } try { const value = await uploadFile(file, status); const [sourceDuration, dimensions] = await Promise.all([probeDuration(value, type), probeDimensions(value, type)]); if (sourceDuration !== null && sourceDuration < 2) { setStatus(`${file.name}: MiniMax references must be at least 2 seconds.`, true); return; } const duration = sourceDuration === null ? null : Math.min(sourceDuration, 15); let thumbnail = null; if (type === "video") { thumbnail = await captureFirstFrame(viewUrl(value)); } const item = { type, value, thumbnail, ...dimensions, ...(duration !== null ? { duration, source_duration: sourceDuration } : {}), ...((type === "video" || type === "audio") ? { trim_start: 0, trim_end: duration } : {}) }; addItem(item); applyResolution(); const added = state.items[state.items.length - 1]; if (type === "audio") void extractWaveform(value, added.id); setStatus(sourceDuration > 15 ? `${file.name} added; cropped to the first 15 seconds.` : `${file.name} added.`); } catch (error) { setStatus(error.message || "Upload failed", true); } }
   const render = () => {
