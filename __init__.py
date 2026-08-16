@@ -4,6 +4,7 @@ if __package__:
     from .nodes.nodes_rtx_upscaler_refiner import DaSiWa_RTX_UpscalerRefiner
     from .nodes.nodes_metadata import DaSiWa_MetadataImageSaver, DaSiWa_MetadataImageSaverFull, DaSiWa_MetadataConfig, DaSiWa_CreateExtraMetadata
     from .nodes.nodes_ltx2_loader import DaSiWa_LTX2LoraLoader
+    from .nodes.nodes_comfy_kitchen_attention import PathchComfyKitchenAttentionDaSiWa
     from .nodes.nodes_watermark import DaSiWa_Watermark
     from .nodes.nodes_random_string_picker import DaSiWa_RandomStringPicker
     from .nodes.nodes_wildcard_preset_prompt_builder import DaSiWa_WildcardPresetPromptBuilder
@@ -12,6 +13,7 @@ if __package__:
     from .nodes.nodes_enhanced_video_combine import DaSiWa_EnhancedVideoCombine
     from .nodes.nodes_minimax_h3_director import MiniMaxH3Director
     from .nodes.nodes_minimax_h3_director_guide import MiniMaxH3DirectorGuide
+    from .nodes.nodes_minimax_h3_cache import MiniMaxH3Cache
     from .nodes import nodes_system_monitor
     from .nodes.helper_logging import log_startup_summary
 
@@ -25,6 +27,7 @@ if __package__:
         "DaSiWa_MetadataConfig": DaSiWa_MetadataConfig,
         "DaSiWa_CreateExtraMetadata": DaSiWa_CreateExtraMetadata,
         "DaSiWa_LTX2LoraLoader": DaSiWa_LTX2LoraLoader,
+        "PathchComfyKitchenAttentionDaSiWa": PathchComfyKitchenAttentionDaSiWa,
         "DaSiWa_Watermark": DaSiWa_Watermark,
         "DaSiWa_RandomStringPicker": DaSiWa_RandomStringPicker,
         "DaSiWa_WildcardPresetPromptBuilder": DaSiWa_WildcardPresetPromptBuilder,
@@ -35,6 +38,7 @@ if __package__:
         "DaSiWa_InpaintComposite": DaSiWa_InpaintComposite,
         "MiniMaxH3Director": MiniMaxH3Director,
         "MiniMaxH3DirectorGuide": MiniMaxH3DirectorGuide,
+        "MiniMaxH3Cache": MiniMaxH3Cache,
     }
 
     NODE_DISPLAY_NAME_MAPPINGS = {
@@ -47,6 +51,7 @@ if __package__:
         "DaSiWa_MetadataConfig": "DaSiWa Metadata Config",
         "DaSiWa_CreateExtraMetadata": "DaSiWa Create Extra Metadata",
         "DaSiWa_LTX2LoraLoader": "DaSiWa Advanced LoRA Loader",
+        "PathchComfyKitchenAttentionDaSiWa": "Patch Comfy Kitchen Attention",
         "DaSiWa_Watermark": "DaSiWa Watermark Overlay",
         "DaSiWa_RandomStringPicker": "DaSiWa Random String Picker",
         "DaSiWa_WildcardPresetPromptBuilder": "DaSiWa Wildcard & Preset Prompt Builder",
@@ -57,6 +62,7 @@ if __package__:
         "DaSiWa_InpaintComposite": "DaSiWa Inpaint Composite",
         "MiniMaxH3Director": "MiniMax H3 Director",
         "MiniMaxH3DirectorGuide": "MiniMax H3 Director Guide",
+        "MiniMaxH3Cache": "MiniMax H3 Cache",
     }
     log_startup_summary(len(NODE_CLASS_MAPPINGS))
 else:

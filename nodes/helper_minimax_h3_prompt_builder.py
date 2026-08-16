@@ -236,12 +236,15 @@ def _simple_lines(state: dict) -> list[tuple[str, str]]:
 
 
 def _build_simple_prompt(state: dict) -> str:
-    """Render the builder fields as one flat, unheadered prompt block.
+    """Render the saved one-field simple prompt, with a legacy flat fallback.
 
-    Every non-empty field keeps its name so the result stays self-describing
-    and lossless; empty fields are skipped so a sparse state never emits
-    dead lines.
+    New simple-mode workflows store their editable text in ``simple_prompt``.
+    Older simple-mode workflows have only the structured field values, so keep
+    flattening those fields rather than discarding their prompt on load.
     """
+    simple_prompt = state.get("simple_prompt")
+    if isinstance(simple_prompt, str):
+        return simple_prompt.strip()
     lines = [f"{header}: {value}" for header, value in _simple_lines(state) if value]
     return "\n".join(lines)
 

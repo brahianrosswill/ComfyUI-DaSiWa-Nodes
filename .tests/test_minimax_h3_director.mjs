@@ -40,9 +40,15 @@ assert.match(source, /window\.open\(REPOSITORY_URL, "_blank", "noopener,noreferr
 assert.match(source, /const promptStyle = \(\) => \{ const v = builderState\?\.prompt_mode;/, "the builder must expose a validated prompt-style accessor");
 assert.match(source, /styleButton\.className = "ds-h3-prompt-mode-btn"/, "the mode bar must render a prompt-style toggle button");
 assert.match(source, /builderState\.prompt_mode = styleLabel === "simple" \? "structured" : "simple"/, "the toggle must flip between the simple and structured styles");
+assert.match(source, /function buildSimpleForm\(panel\)/, "simple mode must render its own one-field prompt form");
+assert.match(source, /createBuilderField\("Prompt", builderState\.simple_prompt/, "simple mode must bind the visible field to serialized simple_prompt state");
+assert.match(source, /if \(styleLabel !== "simple"\) builderState\.simple_prompt = previewTextFor\(mode\(\), false\);/, "switching into simple mode must seed the single field from the current builder prompt");
 assert.match(source, /\.ds-h3-prompt-mode-btn\{[^`]*box-shadow:0 0 8px rgba\(126,235,167/, "the prompt-style toggle must use the green-glow accent");
 assert.match(source, /function showPromptPreview\(\) \{[\s\S]*?const promptText = previewTextFor\(m, hasExternalPrompt\(\)\);/, "the prompt preview must render the selected style");
 assert.doesNotMatch(source, /builderState\.prompt_mode = styleLabel === "structured" \? "simple" : "structured"/, "the toggle must not invert the wrong way");
+assert.match(source, /const resetBuilderState = \(\) => \{ builderState = DEFAULT_BUILDER_STATE\(mode\(\)\); builderState\.mode = mode\(\); \};/, "Clear must reset all serialized builder fields to the current mode defaults");
+assert.match(source, /const clearAll = \(\) => \{ selectedId = null; resetBuilderState\(\);/, "Clear must reset prompt/text fields as well as selected media");
+assert.match(source, /const hasContent = state\.items\.length \|\| state\.prompt_blocks\?\.length \|\| hasBuilderContent\(\) \|\| String\(promptWidget\?\.value \|\| ""\)\.trim\(\);/, "Clear must remain available when only builder text is filled");
 
 const moduleUrl = `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
 const { mediaTypeFor, REPOSITORY_URL } = await import(moduleUrl);

@@ -138,11 +138,30 @@ function install(node) {
   const setStatus = (message, isError = false) => { status.textContent = message; status.classList.toggle("error", isError); };
   const emit = () => { builderState.mode = mode(); state.builder_state = builderState; dataWidget.value = JSON.stringify(state); dataWidget.callback?.(dataWidget.value); if (builderWidget) { builderWidget.value = JSON.stringify(builderState); builderWidget.callback?.(builderWidget.value); } node.graph?.setDirtyCanvas(true, true); };
   const promptStyle = () => { const v = builderState?.prompt_mode; return v === "simple" || v === "structured" ? v : "structured"; };
+  function legacySimplePromptFor(m) {
+    if (m === "REF2VA") {
+      const r = builderState.ref || {};
+      return [
+        r.subject_definitions ? `subject_definitions: ${r.subject_definitions}` : "",
+        r.summary ? `summary: ${r.summary}` : "",
+        r.retention_analysis ? `retention_analysis: ${r.retention_analysis}` : "",
+        r.detailed_description ? `detailed_description: ${r.detailed_description}` : "",
+        r.soundscape ? `overall_soundscape: ${r.soundscape}` : "",
+        `non_diegetic_music: ${r.music || "N/A"}`,
+      ].filter(Boolean).join("\n");
+    }
+    return [
+      builderState.imd ? `integrated_multimodal_description: ${builderState.imd}` : "",
+      builderState.soundscape ? `overall_soundscape: ${builderState.soundscape}` : "",
+      `non_diegetic_music: ${builderState.music || "N/A"}`,
+    ].filter(Boolean).join("\n");
+  }
   function previewTextFor(m, external) {
     if (external) {
       const t = String(externalPromptWidget()?.value || "").trim();
       return t || "(External prompt detected — the prompt is supplied by the upstream node at execution time.)";
     }
+    if (promptStyle() === "simple") return typeof builderState.simple_prompt === "string" ? builderState.simple_prompt : legacySimplePromptFor(m);
     const areas = timeline.querySelectorAll(".ds-h3-prompt-panel .ds-h3-prompt");
     if (m === "REF2VA") {
       const vals = []; areas.forEach(a => vals.push(String(a.value || "").trim()));
@@ -188,6 +207,14 @@ function install(node) {
     panel.appendChild(helpers); panel.appendChild(imdArea);
     const soundscape = createBuilderField("overall_soundscape", builderState.soundscape, { rows: 3, placeholder: "Describe ambient sounds, dialogue, effects...", onChange: val => { builderState.soundscape = val; emit(); } }); allowNativeTextEditing(soundscape.querySelector("textarea")); panel.appendChild(soundscape);
     const music = createBuilderField("non_diegetic_music", builderState.music, { rows: 2, placeholder: 'N/A or describe background score...', onChange: val => { builderState.music = val; emit(); } }); allowNativeTextEditing(music.querySelector("textarea")); panel.appendChild(music);
+  }
+
+  function buildSimpleForm(panel) {
+    panel.replaceChildren();
+    const label = document.createElement("div"); label.className = "ds-h3-small"; label.textContent = `${mode()} simple prompt`; panel.appendChild(label);
+    const simplePrompt = createBuilderField("Prompt", builderState.simple_prompt, { rows: 10, placeholder: "Write the complete MiniMax H3 prompt...", onChange: val => { builderState.simple_prompt = val; emit(); } });
+    allowNativeTextEditing(simplePrompt.querySelector("textarea"));
+    panel.appendChild(simplePrompt);
   }
 
   function buildRefForm(panel) {
@@ -445,7 +472,9 @@ function install(node) {
   const slotCapacity = lane => availableSlots(lane).length;
   const addItem = item => mutate(s => { const lane = laneForItem(item); const occupied = new Set(s.items.filter(x => laneForItem(x) === lane).map(x => x.slot).filter(Number.isInteger)); const slot = availableSlots(lane).find(index => !occupied.has(index)); if (slot == null) throw new Error(`No free ${lane} slot is available.`); s.items.push({ id: idFor(item.type, s.items.length), enabled: true, order: s.items.length, slot, start: slot, duration: item.type === "image" ? 1 : 2, ...item }); });
   const remove = id => mutate(s => { s.items = s.items.filter(x => x.id !== id); if (selectedId === id) selectedId = null; });
-  const clearAll = () => { selectedId = null; if (promptWidget) { promptWidget.value = ""; promptWidget.callback?.(promptWidget.value); } mutate(s => { s.items = []; s.prompt_blocks = []; }); setStatus("All media and prompts cleared."); };
+  const resetBuilderState = () => { builderState = DEFAULT_BUILDER_STATE(mode()); builderState.mode = mode(); };
+  const hasBuilderContent = () => [builderState.imd, builderState.soundscape, builderState.simple_prompt, ...Object.values(builderState.ref || {})].some(value => typeof value === "string" && value !== "N/A" && value.trim());
+  const clearAll = () => { selectedId = null; resetBuilderState(); if (promptWidget) { promptWidget.value = ""; promptWidget.callback?.(promptWidget.value); } mutate(s => { s.items = []; s.prompt_blocks = []; }); setStatus("All media and prompts cleared."); };
   timeline.addEventListener("keydown", event => { if (event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLInputElement) return; if ((event.key === "Delete" || event.key === "Backspace") && selectedId) { const sel = state.items.find(x => x.id === selectedId); if (sel && isLockedSlot(sel)) { setStatus(`${mediaReferenceName(sel.type)} ${sel.slot + 1} is locked in L2VA mode`, true); return; } event.preventDefault(); event.stopPropagation(); remove(selectedId); } });
   const move = (id, delta) => mutate(s => { const i = s.items.findIndex(x => x.id === id); const j = i + delta; if (i >= 0 && j >= 0 && j < s.items.length) [s.items[i], s.items[j]] = [s.items[j], s.items[i]]; });
   const replace = (id, value) => mutate(s => { const x = s.items.find(i => i.id === id); if (x) x.value = value; });
@@ -513,8 +542,8 @@ function install(node) {
     const modeGroup = document.createElement("div"); modeGroup.className = "ds-h3-mode-group"; modeGroup.style.display = "flex"; modeGroup.style.flexDirection = "column"; modeGroup.style.alignItems = "flex-start"; modeGroup.style.gap = "4px"; modeGroup.style.padding = "6px"; modeGroup.style.background = "#0d1217"; modeGroup.style.border = "1px solid #344452"; modeGroup.style.borderRadius = "6px";
     const topRow = document.createElement("div"); topRow.className = "ds-h3-modebar"; topRow.style.flexWrap = "nowrap"; topRow.style.justifyContent = "space-between"; topRow.style.gap = "6px"; topRow.style.padding = "0"; topRow.style.border = "0"; topRow.style.background = "transparent";
     const modesSide = document.createElement("span"); modesSide.className = "ds-h3-actions"; modesSide.style.gap = "4px"; ["T2VA", "I2VA", "FL2VA", "L2VA", "REF2VA"].forEach(value => { const button = document.createElement("button"); button.textContent = value; button.classList.toggle("active", mode() === value); button.onclick = () => { if (modeWidget) { modeWidget.value = value; modeWidget.callback?.(value); } if (selectedLane === "audio" && value !== "REF2VA") selectedLane = "visual"; render(); }; modesSide.append(button); });
-    const rightSide = document.createElement("span"); rightSide.className = "ds-h3-actions"; rightSide.style.gap = "4px"; const hasContent = state.items.length || state.prompt_blocks?.length || String(promptWidget?.value || "").trim(); if (hasContent) { const clearButton = document.createElement("button"); clearButton.className = "ds-h3-clear-btn"; clearButton.textContent = "Clear"; clearButton.title = "Remove all media and prompts"; clearButton.onclick = clearAll; rightSide.append(clearButton); } if (selected) { if (!isLockedSlot(selected)) { const removeButton = document.createElement("button"); removeButton.className = "ds-h3-remove-btn"; removeButton.textContent = "Remove"; removeButton.title = `Remove selected ${selected.type}`; removeButton.onclick = () => remove(selected.id); rightSide.append(removeButton); } else { setStatus(`${mediaReferenceName(selected.type)} ${selected.slot + 1} is locked in L2VA mode`, true); } } const docsButton = document.createElement("button"); docsButton.className = "ds-h3-docs"; docsButton.textContent = "?"; docsButton.title = "Open MiniMax H3 Director documentation on GitHub"; docsButton.onclick = () => window.open(REPOSITORY_URL, "_blank", "noopener,noreferrer"); rightSide.append(docsButton);
-    const styleButton = document.createElement("button"); styleButton.className = "ds-h3-prompt-mode-btn"; const styleLabel = promptStyle(); styleButton.textContent = `Prompt: ${styleLabel === "simple" ? "Simple" : "Structured"}`; styleButton.title = "Toggle how the builder fields are assembled into the final prompt"; styleButton.onclick = () => { builderState.prompt_mode = styleLabel === "simple" ? "structured" : "simple"; emit(); render(); }; rightSide.append(styleButton);
+    const rightSide = document.createElement("span"); rightSide.className = "ds-h3-actions"; rightSide.style.gap = "4px"; const hasContent = state.items.length || state.prompt_blocks?.length || hasBuilderContent() || String(promptWidget?.value || "").trim(); if (hasContent) { const clearButton = document.createElement("button"); clearButton.className = "ds-h3-clear-btn"; clearButton.textContent = "Clear"; clearButton.title = "Remove all media and prompts"; clearButton.onclick = clearAll; rightSide.append(clearButton); } if (selected) { if (!isLockedSlot(selected)) { const removeButton = document.createElement("button"); removeButton.className = "ds-h3-remove-btn"; removeButton.textContent = "Remove"; removeButton.title = `Remove selected ${selected.type}`; removeButton.onclick = () => remove(selected.id); rightSide.append(removeButton); } else { setStatus(`${mediaReferenceName(selected.type)} ${selected.slot + 1} is locked in L2VA mode`, true); } } const docsButton = document.createElement("button"); docsButton.className = "ds-h3-docs"; docsButton.textContent = "?"; docsButton.title = "Open MiniMax H3 Director documentation on GitHub"; docsButton.onclick = () => window.open(REPOSITORY_URL, "_blank", "noopener,noreferrer"); rightSide.append(docsButton);
+    const styleButton = document.createElement("button"); styleButton.className = "ds-h3-prompt-mode-btn"; const styleLabel = promptStyle(); styleButton.textContent = `Prompt: ${styleLabel === "simple" ? "Simple" : "Structured"}`; styleButton.title = "Toggle between one free-text prompt and the structured builder"; styleButton.onclick = () => { if (styleLabel !== "simple") builderState.simple_prompt = previewTextFor(mode(), false); builderState.prompt_mode = styleLabel === "simple" ? "structured" : "simple"; emit(); render(); }; rightSide.append(styleButton);
     topRow.append(modesSide, rightSide); modeGroup.append(topRow);
     const modeHint = { T2VA: "T2VA · no input frame", I2VA: "I2VA · one opening-frame slot", FL2VA: "FL2VA · opening and closing-frame slots", L2VA: "L2VA · one closing-frame slot" }; const hint = document.createElement("div"); hint.className = "ds-h3-mode-hint"; hint.style.fontSize = "11px"; hint.style.color = "#9fb3c2"; hint.style.margin = "0"; hint.textContent = modeHint[mode()] || `REF2VA · up to ${MAX.image} image, ${MAX.video} video, and ${MAX.audio} audio slots · ${MAX.total} combined files maximum`; modeGroup.append(hint);
     timeline.append(modeGroup);
@@ -535,7 +564,9 @@ function install(node) {
       clip.onclick = event => { if (event.target !== clip) return; selectedId = item.id; render(); }; clip.onpointerdown = event => { selectedId = item.id; if (event.target !== clip) return; event.stopPropagation(); clip.setPointerCapture?.(event.pointerId); const origin = event.clientX; const originalLeft = slotLeft(laneNameFor(item), item.slot); const lane = laneNameFor(item); const slotCount = lane === "audio" ? MAX.audio : visualSlotCount(); let dragged = false; const onMove = moveEvent => { dragged ||= Math.abs(moveEvent.clientX - origin) >= 4; if (dragged) clip.style.left = `${originalLeft + moveEvent.clientX - origin}px`; }; const onUp = moveEvent => { clip.removeEventListener("pointermove", onMove); clip.removeEventListener("pointerup", onUp); if (!dragged) return; const rect = trackInner.getBoundingClientRect(); const x = moveEvent.clientX - rect.left; const targetSlot = Array.from({ length: slotCount }, (_, slot) => slot).reduce((nearest, slot) => Math.abs((slotLeft(lane, slot) + slotWidthFor(slotItem(lane, slot)) / 2) - x) < Math.abs((slotLeft(lane, nearest) + slotWidthFor(slotItem(lane, nearest)) / 2) - x) ? slot : nearest, 0); mutate(s => { const moved = s.items.find(x => x.id === item.id); if (!moved) return; const occupant = s.items.find(x => x.id !== moved.id && laneForItem(x) === laneForItem(moved) && x.slot === targetSlot); const previousSlot = moved.slot; moved.slot = targetSlot; moved.start = targetSlot; if (occupant) { occupant.slot = previousSlot; occupant.start = previousSlot; } }); }; clip.addEventListener("pointermove", onMove); clip.addEventListener("pointerup", onUp); }; lanes.get(item.type === "audio" ? "audio" : "Image/Video").append(clip); }); track.append(trackInner); timeline.append(track);
     // Unified prompt-builder form replacing legacy per-item/global prompts
     const promptPanel = document.createElement("div"); promptPanel.className = "ds-h3-prompt-panel";
-    if (mode() === "REF2VA") {
+    if (promptStyle() === "simple") {
+      buildSimpleForm(promptPanel);
+    } else if (mode() === "REF2VA") {
       buildRefForm(promptPanel);
     } else {
       buildBaseForm(promptPanel);

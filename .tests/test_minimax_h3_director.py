@@ -121,6 +121,14 @@ def test_base_mode_simple_flattens_fields_without_alignment_head():
     assert "\n\n" not in prompt
 
 
+def test_simple_prompt_mode_uses_the_single_saved_prompt_field():
+    state = default_builder_state("REF2VA")
+    state.update({"prompt_mode": "simple", "simple_prompt": "A red fox walks through a quiet forest."})
+    state["ref"].update({"subject_definitions": "This must not be rendered."})
+
+    assert build_prompt(state) == "A red fox walks through a quiet forest."
+
+
 def test_prompt_mode_simple_is_lossless_vs_structured_fields():
     """Every non-empty field present in structured must appear in simple."""
     state = default_builder_state("FL2VA")

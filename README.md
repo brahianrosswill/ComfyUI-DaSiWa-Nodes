@@ -24,6 +24,18 @@ Timeline-based authoring for MiniMax H3 text/image/video generation and referenc
 
 [Full documentation, UI guide, and prompting reference →](docs/minimax_h3_director.md)
 
+### ⚡ MiniMax H3 Cache
+
+An approximate, model-scoped whole-block-stack residual cache for ComfyUI's native MiniMax H3 model.
+
+- **MODEL PATCH:** clones only the connected MiniMax H3 `MODEL`; no global model-class monkey patch.
+- **CONTROLLED REUSE:** sampled audio/video-token relative-L1 threshold, 15–90% sampling window, and a bounded number of consecutive cache hits.
+- **STORAGE:** auto / CUDA / CPU cached-residual storage with CPU fallback if automatic storage runs out of VRAM.
+- **COMPATIBILITY:** preserves ComfyUI block replacements and transformer options; can be chained with **Patch Comfy Kitchen Attention**.
+- **QUALITY:** approximate optimization—higher cache thresholds trade fidelity for more skipped block-stack evaluations.
+
+[Full documentation, usage, compatibility, and provenance →](docs/minimax_h3_cache.md)
+
 
 ---
 
