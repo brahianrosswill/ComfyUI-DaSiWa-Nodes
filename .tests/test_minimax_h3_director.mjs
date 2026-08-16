@@ -7,7 +7,7 @@ source = source.replace(
     'import { app } from "../../../scripts/app.js";\nimport { api } from "../../../scripts/api.js";',
     "const app = { registerExtension() {} }; const api = {};"
 );
-source += "\nexport { mediaTypeFor, REPOSITORY_URL, MINIMAX_MULTIPLE, ASPECT_OPTIONS, RESOLUTION_PRESETS };";
+source += "\nexport { mediaTypeFor, wavDurationFromBuffer, REPOSITORY_URL, MINIMAX_MULTIPLE, ASPECT_OPTIONS, RESOLUTION_PRESETS };";
 
 assert.match(source, /lane\.ondrop = event => \{ if \(!supported\)/, "each timeline lane must own its direct drop handler");
 assert.match(source, /acceptLaneDrop\(event, targetLane\)/, "supported lane drops must use the direct lane upload path");
@@ -34,6 +34,8 @@ assert.doesNotMatch(source, /FL2VA: \$\{timelineSeconds\.toFixed\(2\)\}s/, "the 
 assert.match(source, /audioSlotWidth = sourceDuration =>.*Math\.log2/, "audio slots must fit long source files logarithmically");
 assert.match(source, /ds-h3-audio-crop-marker start/, "audio clips must draw a crop-start position marker");
 assert.match(source, /ds-h3-audio-crop-marker end/, "audio clips must draw a crop-end position marker");
+assert.match(source, /dragging = "range"/, "the preview crop range must be draggable as a whole");
+assert.match(source, /const width = parseFloat\(rangeTe\.value\) - parseFloat\(rangeTs\.value\);[\s\S]*?rangeTe\.value = start \+ width;/, "moving the crop range must preserve its duration");
 assert.match(source, /Math\.log1p\(9 \* peaks\[peakIndex\]\)/, "audio waveform amplitudes must use logarithmic scaling");
 assert.doesNotMatch(source, /if \(item\.type === "audio"\) return; if \(event\.target !== clip\) return;/, "audio slots must be horizontally movable");
 assert.match(source, /window\.open\(REPOSITORY_URL, "_blank", "noopener,noreferrer"\)/, "the help button must open the GitHub documentation safely");
@@ -78,7 +80,15 @@ assert.match(source, /dimensionField\("WIDTH", settings\.custom_width/, "fixed c
 assert.match(source, /dimensionField\("HEIGHT", settings\.custom_height/, "fixed custom resolution must label the height field");
 
 const moduleUrl = `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
-const { mediaTypeFor, REPOSITORY_URL, MINIMAX_MULTIPLE, ASPECT_OPTIONS, RESOLUTION_PRESETS } = await import(moduleUrl);
+const { mediaTypeFor, wavDurationFromBuffer, REPOSITORY_URL, MINIMAX_MULTIPLE, ASPECT_OPTIONS, RESOLUTION_PRESETS } = await import(moduleUrl);
+
+assert.equal(mediaTypeFor({ name: "REFERENCE.WAVE", type: "" }), "audio", "the .wave WAV alias must be accepted even without a browser MIME type");
+assert.equal(mediaTypeFor({ name: "reference.wav", type: undefined }), "audio", "WAV detection must tolerate missing MIME types");
+const wav = new ArrayBuffer(64);
+const wavView = new DataView(wav);
+for (const [offset, text] of [[0, "RIFF"], [8, "WAVE"], [12, "fmt "], [36, "JUNK"], [48, "data"]]) for (let index = 0; index < text.length; index++) wavView.setUint8(offset + index, text.charCodeAt(index));
+wavView.setUint32(4, 56, true); wavView.setUint32(16, 16, true); wavView.setUint32(28, 192000, true); wavView.setUint32(40, 4, true); wavView.setUint32(52, 8, true);
+assert.equal(wavDurationFromBuffer(wav), 8 / 192000, "WAV duration fallback must accept metadata chunks between fmt and data");
 
 for (const [name, type] of [
     ["reference.webp", "image"],

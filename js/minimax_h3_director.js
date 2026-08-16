@@ -27,7 +27,7 @@ const RESOLUTION_PRESETS = {
 const REPOSITORY_URL = "https://github.com/darksidewalker/ComfyUI-DaSiWa-Nodes/blob/main/docs/minimax_h3_director.md";
 const IMAGE_EXTENSIONS = new Set(["avif", "bmp", "gif", "heic", "heif", "jpeg", "jpg", "jxl", "png", "tif", "tiff", "webp"]);
 const VIDEO_EXTENSIONS = new Set(["3gp", "avi", "flv", "m2ts", "m4v", "mkv", "mov", "mp4", "mpeg", "mpg", "mts", "ts", "webm", "wmv"]);
-const AUDIO_EXTENSIONS = new Set(["aac", "aif", "aiff", "alac", "amr", "ape", "caf", "flac", "m4a", "mka", "mp3", "oga", "ogg", "opus", "wav", "weba", "wma"]);
+const AUDIO_EXTENSIONS = new Set(["aac", "aif", "aiff", "alac", "amr", "ape", "caf", "flac", "m4a", "mka", "mp3", "oga", "ogg", "opus", "wav", "wave", "weba", "wma"]);
 let cssInstalled = false;
 
 function installStyles() {
@@ -52,13 +52,30 @@ function viewUrl(path) { return api.apiURL(`/view?filename=${encodeURIComponent(
 function count(state, type) { return state.items.filter(i => i.enabled !== false && i.type === type).length; }
 function idFor(type, n) { return `${type}-${Date.now()}-${n}`; }
 function mediaTypeFor(file) {
-  if (file.type.startsWith("image/")) return "image";
-  if (file.type.startsWith("video/")) return "video";
-  if (file.type.startsWith("audio/")) return "audio";
+  const mimeType = String(file.type || "").toLowerCase();
+  if (mimeType.startsWith("image/")) return "image";
+  if (mimeType.startsWith("video/")) return "video";
+  if (mimeType.startsWith("audio/")) return "audio";
   const extension = String(file.name || "").split(".").pop().toLowerCase();
   if (IMAGE_EXTENSIONS.has(extension)) return "image";
   if (VIDEO_EXTENSIONS.has(extension)) return "video";
   return AUDIO_EXTENSIONS.has(extension) ? "audio" : null;
+}
+function wavDurationFromBuffer(buffer) {
+  const data = new DataView(buffer);
+  if (data.byteLength < 12 || data.getUint32(0, false) !== 0x52494646 || data.getUint32(8, false) !== 0x57415645) return null;
+  let byteRate = null;
+  let dataSize = null;
+  for (let offset = 12; offset + 8 <= data.byteLength;) {
+    const chunk = data.getUint32(offset, false);
+    const size = data.getUint32(offset + 4, true);
+    const contentOffset = offset + 8;
+    if (contentOffset + size > data.byteLength) return null;
+    if (chunk === 0x666d7420 && size >= 16) byteRate = data.getUint32(contentOffset + 8, true);
+    if (chunk === 0x64617461) dataSize = size;
+    offset = contentOffset + size + (size & 1);
+  }
+  return byteRate && dataSize !== null ? dataSize / byteRate : null;
 }
 function mediaLabel(item) {
   const name = String(item.value || "media").split("/").pop();
@@ -414,13 +431,13 @@ function install(node) {
         rangeTs.value = sPct; rangeTe.value = ePct;
         syncMarkers();
       };
-      const trackBg = document.createElement("div"); trackBg.style.cssText = "position:relative;height:18px;background:#111a21;border-radius:3px;margin-top:4px;margin-bottom:4px;";
+      const trackBg = document.createElement("div"); trackBg.title = "Drag the highlighted crop to move it; drag either end marker to resize it."; trackBg.style.cssText = "position:relative;height:18px;background:#111a21;border-radius:3px;margin-top:4px;margin-bottom:4px;cursor:grab;";
       const filledBar = document.createElement("div"); filledBar.style.cssText = "position:absolute;top:0;left:0;right:0;bottom:0;border-radius:3px;background:rgba(126,210,157,.25);pointer-events:none;";
       const markerS = document.createElement("div"); markerS.style.cssText = "position:absolute;top:-2px;width:8px;height:22px;background:#f3c67a;border-radius:2px;z-index:3;cursor:pointer;transform:translateX(-50%);";
       const markerE = document.createElement("div"); markerE.style.cssText = "position:absolute;top:-2px;width:8px;height:22px;background:#8dd7ff;border-radius:2px;z-index:3;cursor:pointer;transform:translateX(-50%);";
       const rangeTs = document.createElement("input"); rangeTs.type = "range"; rangeTs.min = "0"; rangeTs.max = "100"; rangeTs.step = "0.1"; rangeTs.value = ((trimStart / sourceDuration) * 100).toFixed(1); rangeTs.style.cssText = "position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;pointer-events:none;z-index:0;";
       const rangeTe = document.createElement("input"); rangeTe.type = "range"; rangeTe.min = "0"; rangeTe.max = "100"; rangeTe.step = "0.1"; rangeTe.value = ((trimEnd / sourceDuration) * 100).toFixed(1); rangeTe.style.cssText = "position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;pointer-events:none;z-index:0;";
-      const MARKER_GRAB_RADIUS = 12;
+      const MARKER_GRAB_RADIUS_PX = 12;
       const pointerPct = pointerX => {
         const rect = trackBg.getBoundingClientRect();
         return ((pointerX - rect.left) / rect.width) * 100;
@@ -450,14 +467,19 @@ function install(node) {
         teInput.value = teSec.toFixed(2);
       };
       let dragging = null;
+      let cropDragOffset = 0;
       const onStart = pointerX => {
         const pct = pointerPct(pointerX);
         const sPct = parseFloat(rangeTs.value);
         const ePct = parseFloat(rangeTe.value);
-        if (Math.abs(pct - sPct) <= MARKER_GRAB_RADIUS && Math.abs(pct - sPct) <= Math.abs(pct - ePct)) {
+        const markerGrabRadius = (MARKER_GRAB_RADIUS_PX / trackBg.getBoundingClientRect().width) * 100;
+        if (Math.abs(pct - sPct) <= markerGrabRadius && Math.abs(pct - sPct) <= Math.abs(pct - ePct)) {
           dragging = "left";
-        } else if (Math.abs(pct - ePct) <= MARKER_GRAB_RADIUS) {
+        } else if (Math.abs(pct - ePct) <= markerGrabRadius) {
           dragging = "right";
+        } else if (pct > sPct && pct < ePct) {
+          dragging = "range";
+          cropDragOffset = pct - sPct;
         } else {
           dragging = null;
         }
@@ -467,16 +489,22 @@ function install(node) {
         const pct = pointerPct(pointerX);
         if (dragging === "left") {
           rangeTs.value = Math.max(0, Math.min(100, pct));
-        } else {
+        } else if (dragging === "right") {
           rangeTe.value = Math.max(0, Math.min(100, pct));
+        } else {
+          const width = parseFloat(rangeTe.value) - parseFloat(rangeTs.value);
+          const start = Math.max(0, Math.min(100 - width, pct - cropDragOffset));
+          rangeTs.value = start;
+          rangeTe.value = start + width;
         }
         clampSliders();
       };
-      const onEnd = () => { dragging = null; };
-      trackBg.addEventListener("mousedown", event => { onStart(event.clientX); });
+      const onEnd = () => { dragging = null; trackBg.style.cursor = "grab"; };
+      const onPointerStart = pointerX => { onStart(pointerX); if (dragging) trackBg.style.cursor = "grabbing"; };
+      trackBg.addEventListener("mousedown", event => { onPointerStart(event.clientX); });
       window.addEventListener("mousemove", event => { onMove(event.clientX); });
       window.addEventListener("mouseup", () => { onEnd(); });
-      trackBg.addEventListener("touchstart", event => { onStart(event.touches[0].clientX); }, { passive: false });
+      trackBg.addEventListener("touchstart", event => { onPointerStart(event.touches[0].clientX); }, { passive: false });
       trackBg.addEventListener("touchmove", event => { event.preventDefault(); onMove(event.touches[0].clientX); }, { passive: false });
       trackBg.addEventListener("touchend", () => { onEnd(); });
       tsInput.onchange = updateFromInputs;
@@ -564,16 +592,21 @@ function install(node) {
     setStatus(`Pasting ${files.length} file${files.length === 1 ? "" : "s"} into the ${selectedLane === "audio" ? "Audio" : "Image/Video"} lane.`);
     for (const file of files) await acceptFile(file, selectedLane);
   });
+  async function probeWavDuration(value) {
+    try { return wavDurationFromBuffer(await (await fetch(viewUrl(value))).arrayBuffer()); }
+    catch (error) { console.warn("[MiniMax H3 Director] WAV metadata probe failed", error); return null; }
+  }
   async function probeDuration(value, type) {
     if (type === "image") return null;
     const media = document.createElement(type === "video" ? "video" : "audio");
     media.preload = "metadata";
     media.src = viewUrl(value);
-    return await new Promise(resolve => {
+    const duration = await new Promise(resolve => {
       const done = result => { media.remove(); resolve(Number.isFinite(result) ? result : null); };
       media.onloadedmetadata = () => done(media.duration);
       media.onerror = () => done(null);
     });
+    return duration ?? (type === "audio" ? await probeWavDuration(value) : null);
   }
   async function probeDimensions(value, type) {
     if (type !== "image" && type !== "video") return null;

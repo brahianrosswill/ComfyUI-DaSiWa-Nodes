@@ -308,6 +308,27 @@ def test_director_paste_replaces_selected_media_without_changing_its_slot():
     assert "s.items[index] = item" in source
 
 
+def test_director_recognizes_wav_aliases_and_falls_back_to_riff_metadata_for_editing():
+    source = Path("js/minimax_h3_director.js").read_text()
+
+    assert '"wav", "wave"' in source
+    assert 'const mimeType = String(file.type || "").toLowerCase();' in source
+    assert "function wavDurationFromBuffer(buffer)" in source
+    assert "async function probeWavDuration(value)" in source
+    assert "data.getUint32(0, false) !== 0x52494646" in source
+    assert "return duration ?? (type === \"audio\" ? await probeWavDuration(value) : null);" in source
+
+
+def test_director_preview_crop_range_can_be_dragged_without_resizing():
+    source = Path("js/minimax_h3_director.js").read_text()
+
+    assert 'dragging = "range"' in source
+    assert "cropDragOffset = pct - sPct" in source
+    assert "MARKER_GRAB_RADIUS_PX" in source
+    assert "const width = parseFloat(rangeTe.value) - parseFloat(rangeTs.value);" in source
+    assert "rangeTe.value = start + width;" in source
+
+
 def test_director_uses_the_native_h3_frame_grid_for_guide_and_output_length():
     guide, output_length, *_ = director.MiniMaxH3Director().build_guide(
         "FL2VA", "overall_soundscape: quiet room tone", 1344, 768, 5, "match", "{}"
