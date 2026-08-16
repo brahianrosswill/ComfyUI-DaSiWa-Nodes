@@ -170,6 +170,17 @@ function install(node) {
   let lastExternalCanvasLinked = hasExternalCanvas();
   const status = document.createElement("div"); status.className = "ds-h3-status ds-h3-info-field"; status.textContent = ""; status.style.display = "none";
   const timeline = document.createElement("div"); timeline.className = "ds-h3 ds-h3-root"; timeline.tabIndex = 0;
+  timeline.addEventListener("wheel", event => {
+    const canvas = app.canvas?.canvas;
+    if (!canvas) return;
+    event.preventDefault();
+    canvas.dispatchEvent(new WheelEvent("wheel", {
+      bubbles: true, cancelable: true, clientX: event.clientX, clientY: event.clientY,
+      deltaX: event.deltaX, deltaY: event.deltaY, deltaZ: event.deltaZ,
+      deltaMode: event.deltaMode, ctrlKey: event.ctrlKey, shiftKey: event.shiftKey,
+      altKey: event.altKey, metaKey: event.metaKey,
+    }));
+  }, { passive: false });
   const setStatus = (message, isError = false) => { status.textContent = message; status.classList.toggle("error", isError); };
   const emit = () => { builderState.mode = mode(); state.builder_state = builderState; dataWidget.value = JSON.stringify(state); dataWidget.callback?.(dataWidget.value); if (builderWidget) { builderWidget.value = JSON.stringify(builderState); builderWidget.callback?.(builderWidget.value); } node.graph?.setDirtyCanvas(true, true); };
   const promptStyle = () => { const v = builderState?.prompt_mode; return v === "simple" || v === "structured" ? v : "structured"; };
@@ -230,7 +241,7 @@ function install(node) {
     const body = `integrated_multimodal_description: ${imd}\n\noverall_soundscape: ${sound}\n\nnon_diegetic_music: ${music}`;
     return head ? `${head}\n\n${body}` : body;
   }
-  const allowNativeTextEditing = element => { ["pointerdown","mousedown","keydown","keypress","keyup","copy","cut","paste"].forEach(type => element.addEventListener(type, event => event.stopPropagation())); };
+  const allowNativeTextEditing = element => { ["pointerdown","mousedown","keydown","keypress","keyup","copy","cut","paste"].forEach(type => element.addEventListener(type, event => { if ((event.ctrlKey || event.metaKey) && event.key === "Enter") return; event.stopPropagation(); })); };
 
   function buildBaseForm(panel) {
     panel.replaceChildren();

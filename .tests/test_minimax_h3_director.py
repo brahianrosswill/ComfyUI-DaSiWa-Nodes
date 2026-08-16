@@ -284,6 +284,20 @@ def test_director_clip_clicks_do_not_commit_a_reorder_without_pointer_movement()
     assert "if (!dragged) return;" in source
 
 
+def test_director_text_fields_preserve_the_comfyui_run_shortcut():
+    source = Path("js/minimax_h3_director.js").read_text()
+
+    assert 'if ((event.ctrlKey || event.metaKey) && event.key === "Enter") return;' in source
+
+
+def test_director_dom_ui_forwards_wheel_events_to_the_comfyui_canvas():
+    source = Path("js/minimax_h3_director.js").read_text()
+
+    assert 'timeline.addEventListener("wheel", event =>' in source
+    assert "const canvas = app.canvas?.canvas;" in source
+    assert 'canvas.dispatchEvent(new WheelEvent("wheel", {' in source
+
+
 def test_director_uses_the_native_h3_frame_grid_for_guide_and_output_length():
     guide, output_length, *_ = director.MiniMaxH3Director().build_guide(
         "FL2VA", "overall_soundscape: quiet room tone", 1344, 768, 5, "match", "{}"
