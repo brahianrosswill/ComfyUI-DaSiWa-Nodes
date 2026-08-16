@@ -36,3 +36,37 @@ def test_menu_flips_up_and_clamps_to_viewport():
     assert 'menu.dataset.place = menuRect.height > spaceBelow && spaceAbove > spaceBelow ? "up" : "down"' in src
     assert 'left + menuRect.width > window.innerWidth - margin' in src
     assert '.ds-h3-res-menu[data-place="up"]{top:auto;bottom:calc(100% + 4px)}' in src
+
+
+def test_aspect_menu_grouped_by_orientation():
+    """Aspect dropdown must render as columns: General / Horizontal / Square / Vertical,
+    with horizontal and vertical ratios sorted ascending per column."""
+    src = _source()
+    assert 'title: "General"' in src
+    assert 'title: "Horizontal"' in src
+    assert 'title: "Square"' in src
+    assert 'title: "Vertical"' in src
+    assert 'aspectItems[w > h ? "horizontal" : w < h ? "vertical" : "square"].push(pair)' in src
+    assert "aspectItems.horizontal.sort((a, b) => ratioOf(a[0]) - ratioOf(b[0]))" in src
+    assert "aspectItems.vertical.sort((a, b) => ratioOf(a[0]) - ratioOf(b[0]))" in src
+
+
+def test_resolution_menu_grouped_by_p_and_mp():
+    """Resolution dropdown must render as columns: General / ###p / MP,
+    sorted ascending within each column."""
+    src = _source()
+    assert 'title: "###p"' in src
+    assert 'title: "MP"' in src
+    assert "resNames.filter(n => !/MP/.test(n)).sort((a, b) => pVal(a) - pVal(b))" in src
+    assert "resNames.filter(n => /MP/.test(n)).sort((a, b) => mpVal(a) - mpVal(b))" in src
+    # 2K (2000) must sort between 1440p and 2160p: K-suffix expansion is required.
+    assert 'String(n).replace(/K$/i, "000").replace(/p$/i, "")' in src
+
+
+def test_grouped_menu_uses_column_layout_css():
+    """Grouped dropdowns must use the .cols flex-column layout with titled columns."""
+    src = _source()
+    assert 'menu.className = hasGroups ? "ds-h3-res-menu cols"' in src
+    assert ".ds-h3-res-menu.cols.open{display:flex;align-items:flex-start;gap:7px}" in src
+    assert ".ds-h3-res-col{display:flex;flex-direction:column;gap:2px;min-width:84px}" in src
+    assert ".ds-h3-res-col-title{" in src
