@@ -336,6 +336,7 @@ def test_director_preview_can_play_only_the_current_crop_range():
     assert "media.currentTime = start;" in source
     assert "if (cropPlayback && media.currentTime >= Number(teInput.value))" in source
     assert "media.currentTime = Number(teInput.value);" in source
+    assert "media.pause();\n        media.currentTime = start;" not in source
 
 
 def test_director_uses_the_native_h3_frame_grid_for_guide_and_output_length():

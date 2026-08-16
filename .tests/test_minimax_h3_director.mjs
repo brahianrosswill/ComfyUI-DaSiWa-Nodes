@@ -38,6 +38,7 @@ assert.match(source, /dragging = "range"/, "the preview crop range must be dragg
 assert.match(source, /const width = parseFloat\(rangeTe\.value\) - parseFloat\(rangeTs\.value\);[\s\S]*?rangeTe\.value = start \+ width;/, "moving the crop range must preserve its duration");
 assert.match(source, /playCropBtn\.textContent = "▶ Play crop"/, "audio and video previews must expose a crop-playback button");
 assert.match(source, /media\.currentTime = start;[\s\S]*?await media\.play\(\)/, "crop playback must seek to the current crop start before playing");
+assert.doesNotMatch(source, /media\.pause\(\);\s*media\.currentTime = start;/, "crop playback must not clear its end guard with an asynchronous pause event before starting");
 assert.match(source, /if \(cropPlayback && media\.currentTime >= Number\(teInput\.value\)\)[\s\S]*?media\.pause\(\);/, "crop playback must stop at the current crop end");
 assert.match(source, /Math\.log1p\(9 \* peaks\[peakIndex\]\)/, "audio waveform amplitudes must use logarithmic scaling");
 assert.doesNotMatch(source, /if \(item\.type === "audio"\) return; if \(event\.target !== clip\) return;/, "audio slots must be horizontally movable");

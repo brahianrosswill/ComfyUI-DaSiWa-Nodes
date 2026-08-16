@@ -516,7 +516,6 @@ function install(node) {
         const start = Number(tsInput.value);
         const end = Number(teInput.value);
         if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return;
-        media.pause();
         media.currentTime = start;
         cropPlayback = true;
         playCropBtn.textContent = "Playing crop…";
