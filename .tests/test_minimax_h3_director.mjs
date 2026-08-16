@@ -38,7 +38,7 @@ assert.match(source, /Math\.log1p\(9 \* peaks\[peakIndex\]\)/, "audio waveform a
 assert.doesNotMatch(source, /if \(item\.type === "audio"\) return; if \(event\.target !== clip\) return;/, "audio slots must be horizontally movable");
 assert.match(source, /window\.open\(REPOSITORY_URL, "_blank", "noopener,noreferrer"\)/, "the help button must open the GitHub documentation safely");
 assert.match(source, /const promptStyle = \(\) => \{ const v = builderState\?\.prompt_mode;/, "the builder must expose a validated prompt-style accessor");
-assert.match(source, /modeLabel\.textContent = "Mode:"/, "the mode bar must label the mode selector");
+assert.match(source, /modeLabel\.textContent = "Model Mode:"/, "the mode bar must label the mode selector");
 assert.match(source, /promptLabel\.textContent = "Prompt Mode:"/, "the mode bar must label the prompt-style selector");
 assert.match(source, /\[\["simple", "Simple"\], \["structured", "Structured"\]\]/, "the prompt-style selector must expose separate Simple and Structured buttons");
 assert.match(source, /promptButton\.classList\.toggle\("active", styleLabel === value\)/, "the selected prompt style must be highlighted");
