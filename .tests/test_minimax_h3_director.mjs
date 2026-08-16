@@ -36,6 +36,9 @@ assert.match(source, /ds-h3-audio-crop-marker start/, "audio clips must draw a c
 assert.match(source, /ds-h3-audio-crop-marker end/, "audio clips must draw a crop-end position marker");
 assert.match(source, /dragging = "range"/, "the preview crop range must be draggable as a whole");
 assert.match(source, /const width = parseFloat\(rangeTe\.value\) - parseFloat\(rangeTs\.value\);[\s\S]*?rangeTe\.value = start \+ width;/, "moving the crop range must preserve its duration");
+assert.match(source, /playCropBtn\.textContent = "▶ Play crop"/, "audio and video previews must expose a crop-playback button");
+assert.match(source, /media\.currentTime = start;[\s\S]*?await media\.play\(\)/, "crop playback must seek to the current crop start before playing");
+assert.match(source, /if \(cropPlayback && media\.currentTime >= Number\(teInput\.value\)\)[\s\S]*?media\.pause\(\);/, "crop playback must stop at the current crop end");
 assert.match(source, /Math\.log1p\(9 \* peaks\[peakIndex\]\)/, "audio waveform amplitudes must use logarithmic scaling");
 assert.doesNotMatch(source, /if \(item\.type === "audio"\) return; if \(event\.target !== clip\) return;/, "audio slots must be horizontally movable");
 assert.match(source, /window\.open\(REPOSITORY_URL, "_blank", "noopener,noreferrer"\)/, "the help button must open the GitHub documentation safely");

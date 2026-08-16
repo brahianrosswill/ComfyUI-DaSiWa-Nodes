@@ -416,6 +416,7 @@ function install(node) {
       const lblTe = document.createElement("span"); lblTe.textContent = "End:"; row1.appendChild(lblTe);
       const teInput = document.createElement("input"); teInput.type = "number"; teInput.step = "0.25"; teInput.min = "0"; teInput.max = String(sourceDuration.toFixed(2)); teInput.value = String(trimEnd.toFixed(2)); teInput.className = "ds-h3-te-input"; row1.appendChild(teInput);
       const lblDur = document.createElement("span"); lblDur.textContent = `/ ${sourceDuration.toFixed(2)}s`; row1.appendChild(lblDur);
+      const playCropBtn = document.createElement("button"); playCropBtn.textContent = "▶ Play crop"; playCropBtn.title = "Play only the current crop range"; playCropBtn.className = "ds-h3-play-crop-btn"; row1.appendChild(playCropBtn);
       controls.appendChild(row1);
       const rowSlider = document.createElement("div"); rowSlider.className = "ds-h3-preview-row"; rowSlider.style.flexDirection = "column"; rowSlider.style.alignItems = "stretch";
       const minRef = Math.min(2, sourceDuration);
@@ -509,6 +510,30 @@ function install(node) {
       trackBg.addEventListener("touchend", () => { onEnd(); });
       tsInput.onchange = updateFromInputs;
       teInput.onchange = updateFromInputs;
+      let cropPlayback = false;
+      const stopCropPlayback = () => { cropPlayback = false; playCropBtn.textContent = "▶ Play crop"; };
+      playCropBtn.onclick = async () => {
+        const start = Number(tsInput.value);
+        const end = Number(teInput.value);
+        if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return;
+        media.pause();
+        media.currentTime = start;
+        cropPlayback = true;
+        playCropBtn.textContent = "Playing crop…";
+        try { await media.play(); }
+        catch (error) { console.warn("[MiniMax H3 Director] Crop playback failed", error); stopCropPlayback(); }
+      };
+      media.addEventListener("timeupdate", () => {
+        if (cropPlayback && media.currentTime >= Number(teInput.value)) {
+          media.pause();
+          media.currentTime = Number(teInput.value);
+          stopCropPlayback();
+        }
+      });
+      media.addEventListener("pause", () => {
+        if (cropPlayback && media.currentTime < Number(teInput.value)) stopCropPlayback();
+      });
+      media.addEventListener("ended", stopCropPlayback);
       updateFromInputs();
       trackBg.append(filledBar, markerS, markerE, rangeTs, rangeTe);
       rowSlider.appendChild(trackBg);

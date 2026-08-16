@@ -329,6 +329,15 @@ def test_director_preview_crop_range_can_be_dragged_without_resizing():
     assert "rangeTe.value = start + width;" in source
 
 
+def test_director_preview_can_play_only_the_current_crop_range():
+    source = Path("js/minimax_h3_director.js").read_text()
+
+    assert 'playCropBtn.textContent = "▶ Play crop"' in source
+    assert "media.currentTime = start;" in source
+    assert "if (cropPlayback && media.currentTime >= Number(teInput.value))" in source
+    assert "media.currentTime = Number(teInput.value);" in source
+
+
 def test_director_uses_the_native_h3_frame_grid_for_guide_and_output_length():
     guide, output_length, *_ = director.MiniMaxH3Director().build_guide(
         "FL2VA", "overall_soundscape: quiet room tone", 1344, 768, 5, "match", "{}"
