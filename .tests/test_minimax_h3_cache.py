@@ -136,4 +136,4 @@ def test_package_registers_mini_max_h3_cache_node():
 
     assert "MiniMaxH3Cache" in source
     assert '"MiniMax H3 Cache"' in source
-    assert module.MiniMaxH3Cache.CATEGORY == "DaSiWa Nodes/MiniMax H3"
+    assert module.MiniMaxH3Cache.CATEGORY == "DaSiWa/MiniMax H3"

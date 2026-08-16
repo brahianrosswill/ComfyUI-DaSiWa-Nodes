@@ -58,7 +58,7 @@ def test_node_schema_and_registration():
     assert controls["pass_frames"][1]["default"] is False
     assert controls["filename_prefix"][1]["default"] == "video_%date:hhmmss%"
     assert enhanced_video_combine._output_filename("video_130405", 1, ".mp4", False) == "video_130405_00001.mp4"
-    assert enhanced_video_combine._output_filename("video_130405", 1, ".mp4", True) == "video_130405_00001-audio.mp4"
+    assert enhanced_video_combine._output_filename("video_130405", 1, ".mp4", True) == "video_130405_00001_audio.mp4"
 
     assert controls["audio_codec"][0] == ["Auto", "AAC", "Opus", "MP3"]
     assert controls["audio_bitrate"][1]["default"] == "192k"

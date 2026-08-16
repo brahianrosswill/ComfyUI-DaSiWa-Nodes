@@ -8,6 +8,14 @@ Since the last GitHub release (August 2026):
 
 ### New features
 
+- **Simple / Structured prompt-mode toggle:** a mode-bar switch changes how builder fields assemble into the final prompt — **Structured** keeps the labelled sections (headers added upstream), **Simple** renders one flat, header-less block. Persisted in `builder_state` (`prompt_mode`), restored on load, honored by **Preview Prompt**; defaults to Structured for backward compatibility.
+- **Grouped column dropdowns:** Aspect / Resolution / Input scaling now render as grouped, ascending columns (aspect by orientation, resolution by ###p / MP tier) with the auto options relabelled **Native (ShortEdge 768px)** (Resolution) and **Native (ShortEdge 2048px)** (Input scaling); menus clamp to the node viewport and scroll natively with the mouse wheel.
+- **Frame rate:** new `frame_rate` FLOAT input (0.1–240, default 24) sets the output FPS and is emitted as a `frame_rate` output for downstream nodes to read; the legacy `external_prompt` input was dropped in favour of `external_prompt_overwrite`.
+- **Crop preview:** a ▶ Play crop button plays only the current crop range, and the preview range itself is draggable for quick scrubbing.
+- **Paste-replace:** pasting (Ctrl+V) onto a selected media tile replaces that tile in place, preserving its slot position instead of appending to the end.
+- **Category rename:** the Director and Guide nodes now register under the **DaSiWa/MiniMax H3** ComfyUI category.
+- **Companion nodes:** the MiniMax H3 family gains **MiniMax H3 Cache** (approximate block-stack residual cache) and **Patch Comfy Kitchen Attention** (INT8 attention model patch) — see the README and [minimax_h3_cache.md](minimax_h3_cache.md).
+- **non_diegetic_music default:** the field starts empty in all modes; `N/A` is applied only at prompt-assembly time when the field is left blank.
 - **Resolution panel:** new Aspect / Resolution / Input scaling selectors under the mode controls (all default to **Auto**). Auto aspect follows the first active visual reference (4:3 fallback with no media); Auto resolution sets a 768 px short side. Fixed aspect ratios, DaSiWa MP and fixed-resolution presets, and CUSTOM values all snap to MiniMax's 16-px grid. Input scaling (Off / Auto / Target / Fit / Fill and crop / Fit and pad / Long side with divisible crop) preprocesses visual references through the included DaSiWa Torch Resize before they reach H3 — Auto never upscales sources at or below a 2048 px short edge.
 - **External overwrite inputs:** optional `external_prompt_overwrite` (STRING) replaces the assembled builder output when connected and non-empty. Connect both `external_width_overwrite` and `external_height_overwrite` (INT) to replace the Director canvas; they accept arbitrary positive values and their alignment is the user's responsibility. An active complete dimension pair disables the Director Aspect/Resolution/Input Scaling controls and passes visual media through unchanged.
 - **REF2VA prompt builder redesigned:** simplified to six free-text fields (subject_definitions, summary, retention_analysis, detailed_description, overall_soundscape, non_diegetic_music). Headers are added automatically when the prompt is sent upstream. Legacy v1 structured-builder data is merged backward-compatibly into these fields.
@@ -29,6 +37,9 @@ Since the last GitHub release (August 2026):
 
 ### Bug fixes
 
+- **WAV `.wave` extension + RIFF duration fallback:** `.wave` is now accepted as an audio extension alongside `.wav`, and when the container/stream carries no usable duration the loader falls back to parsing the RIFF data-chunk size so a clip still reports a real length instead of failing or mis-sizing.
+- **Ctrl+Enter run shortcut preserved:** typing in builder text areas no longer swallows the ComfyUI Ctrl+Enter "queue prompt" shortcut, and timeline wheel events are forwarded to the canvas so the graph still scrolls while hovering the node.
+- **Crop-playback end guard:** removed the pre-seek pause that was clearing the crop-range end guard, so ▶ Play crop stays clamped to the selected range.
 - **Packed stereo audio duration (WAV/PCM):** PyAV returns planar formats (MP3/AAC/OGG) as `(channels, samples)` but packed formats (s16 PCM WAV, flt, s32) as one interleaved row. `load_audio()` read the shape as always `(channels, samples)`, so a stereo WAV measured twice its real length — a 10 s reference was rejected as "20 s", and under 7.5 s it reached the model at double speed with every crop offset on the wrong sample. New `decode_audio_frame()` derives channel count from the frame, de-interleaves packed frames, and normalizes integer PCM to float; both the standalone-audio and embedded-video-audio loaders share it.
 - **Integer PCM scaling by magnitude:** signed PCM was divided by `np.iinfo(dtype).max`, leaving a full-scale `-32768` at `-1.00003` (just outside the unit range). A single full-scale sample then tripped a legacy `abs().max() > 1` guard in `load_embedded_video_audio()`, which divided the whole soundtrack by 32768 — a ~90 dB attenuation. Signed formats are now scaled by `-iinfo(dtype).min` and unsigned 8-bit (silence at 128) is centered on its midpoint; the legacy guard is dropped because `decode_audio_frame()` now guarantees the unit range.
 - **KeyError `'imd'` on every REF2VA run (PR #15):** REF2VA prompts no longer hit a missing `imd` key during prompt assembly.
@@ -48,6 +59,10 @@ Since the last GitHub release (August 2026):
 - Per-video stream switch: choose Video only, Audio only, or Video+embedded-audio with identical trim ranges.
 - Standalone audio clips can be trimmed with left/right handles just like video.
 - Video thumbnails: each uploaded video shows its first frame as a background preview behind the clip tile.
+- Simple / Structured prompt mode: toggle how builder fields assemble into the final prompt (persisted per workflow).
+- Frame rate: `frame_rate` input (0.1–240, default 24) sets the output FPS and is re-emitted as an output.
+- Crop preview: ▶ Play crop plays only the current crop range; the preview range is draggable.
+- Paste-replace: pasting over a selected tile replaces it in place, keeping its slot.
 - Mode-specific prompt builders:
   - FL2VA/I2VA/L2VA/T2VA: guided fields for description and audio sections with automatic alignment headers.
   - REF2VA: six free-text sections (subject_definitions, summary, retention_analysis, detailed_description, overall_soundscape, non_diegetic_music) with helper buttons — Insert Shot, Prefill Labels & Summary, and Preview Prompt.
@@ -170,10 +185,11 @@ Open the node and read top-to-bottom.
 ### Toolbar row
 
 - **Title label:** "MiniMax H3 Director"
-- **Mode buttons (left):** T2VA, I2VA, FL2VA, L2VA, REF2VA shown as small pills. Active mode has purple highlight. Click to switch modes. When switching modes:
+- **Model Mode buttons (left):** T2VA, I2VA, FL2VA, L2VA, REF2VA shown as small pills. Active mode has purple highlight; click to switch modes. When switching modes:
   - Going to FL2VA hides non-image references but keeps them in memory so they reappear when you switch back.
   - Going to REF2VA restores all previously added media.
-- **Clear button:** removes all media and prompts from the timeline (appears only when there is content).
+- **Prompt Mode toggle:** a **Simple** / **Structured** pair next to the mode buttons switches how builder fields assemble into the final prompt (Structured keeps the labelled sections, Simple renders one flat block). The selection is persisted and restored on load.
+- **Clear button:** always visible; removes all media and prompts from the timeline. With no content it is dimmed and reports "Nothing to clear." instead of clearing.
 - **Remove button:** appears when a clip is selected; deletes that item.
 - **? button:** opens the online documentation on GitHub.
 
@@ -284,7 +300,7 @@ Understanding the data path makes wiring and debugging easier.
 
 ### Upstream inputs (what feeds into the Director)
 
-- **Resolution panel / duration:** the Resolution panel under the mode controls drives the hidden width/height widgets. **Aspect: Auto** reads the first image or video reference and preserves its aspect; **Resolution: Auto** sets the resulting short side to 768 px. Common horizontal/vertical aspect choices plus DaSiWa MP and fixed-resolution presets are rounded to MiniMax's 16-pixel grid. Both selectors offer **CUSTOM** values for manual aspect, MP, or exact pixels. All three selectors default to **Auto**. The third **Input scaling** selector preprocesses visual references through the included DaSiWa Torch Resize implementation before they reach H3: **Off** preserves the original tensor, **Auto** preserves its aspect with a 2048-px short edge only when that would downscale the source (smaller inputs pass through unchanged), **Target - Selected Aspect & Resolution** stretches it to the selected Director canvas, and **Fit**, **Fill and crop**, **Fit and pad**, and **Long side with divisible crop** use the corresponding Torch Resize aspect modes against that canvas. Audio is never resized. When both external dimension overwrite inputs are connected, these Director calculations and preprocessing are disabled.
+- **Resolution panel / duration / frame rate:** the Resolution panel under the mode controls drives the hidden width/height widgets. **Aspect: Auto** reads the first image or video reference and preserves its aspect; **Resolution: Auto** sets the resulting short side to 768 px. Common horizontal/vertical aspect choices plus DaSiWa MP and fixed-resolution presets are rounded to MiniMax's 16-pixel grid. Both selectors offer **CUSTOM** values for manual aspect, MP, or exact pixels. All three selectors default to **Auto**. The third **Input scaling** selector preprocesses visual references through the included DaSiWa Torch Resize implementation before they reach H3: **Off** preserves the original tensor, **Auto** preserves its aspect with a 2048-px short edge only when that would downscale the source (smaller inputs pass through unchanged), **Target - Selected Aspect & Resolution** stretches it to the selected Director canvas, and **Fit**, **Fill and crop**, **Fit and pad**, and **Long side with divisible crop** use the corresponding Torch Resize aspect modes against that canvas. Audio is never resized. When both external dimension overwrite inputs are connected, these Director calculations and preprocessing are disabled. The `frame_rate` FLOAT input (0.1–240, default 24) sets the output frame rate and is re-emitted as a `frame_rate` output for downstream nodes.
 - **Optional model sockets** (`fl2va_model`, `ref2va_model`): connect only the model matching your current mode; the Guide uses them lazily.
 - All media is managed inside the node UI (upload/paste/drop), but paths ultimately live in ComfyUI's `input/` folder.
 
@@ -298,12 +314,12 @@ On queue, the Director executes this sequence:
    - For REF2VA: processes images, videos, and audio respecting slot limits.
 3. Loads each asset:
    - Images → resized tensors.
-   - Videos → decoded to 24 fps frame batches, cropped according to trim_start/trim_end.
+   - Videos → decoded to `frame_rate` fps frame batches (default 24), cropped according to trim_start/trim_end.
    - Audio → decoded waveforms, cropped identically.
    - For videos in A or V+A mode → embedded audio is extracted using the same crop window.
    - Attached soundtracks → loaded and cropped using the host video's trim range.
 4. Builds a structured `guide` dictionary containing:
-   - Mode flag, dimensions, duration.
+   - Mode flag, dimensions, duration, and frame rate.
    - Ordered lists of images, videos, audios with metadata.
    - Endpoint frames (FL2VA).
    - Reference maps keyed as `ref_image_N`, `ref_video_N`, `ref_audio_N`, `ref_video_audio_N`.

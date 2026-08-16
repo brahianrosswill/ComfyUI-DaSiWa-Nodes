@@ -20,7 +20,11 @@ Timeline-based authoring for MiniMax H3 text/image/video generation and referenc
   - REF2VA: simplified six-section free-text builder (subject_definitions, summary, retention_analysis, detailed_description, overall_soundscape, non_diegetic_music) with helper buttons: **Insert [Shot N]** places shot markers at cursor, **Prefill Labels & Summary** auto-generates Picture/Video/Audio labels from your inserted media, and **Preview Prompt** shows the exact assembled prompt in a popup with copy-to-clipboard.
 - **VALIDATED LIMITS:** 2–15 second reference windows; max 15s combined visual and audio duration each; strict path-safety under ComfyUI's input directory.
 - **NATIVE ROUTING & LAZY LOADING:** hands validated data to ComfyUI's built-in MiniMaxH3ImageToVideo / MiniMaxH3ReferenceToVideo nodes; only the selected FL2VA or REF2VA model is requested.
-- **RESOLUTION PANEL:** Aspect / Resolution / Input scaling selectors (all default to **Auto**) drive the output canvas on MiniMax's 16-px grid — Auto aspect follows your first visual reference, Auto resolution sets a 768 px short side, plus fixed aspect, MP and pixel presets with CUSTOM values. Input scaling (Off / Auto / Target / Fit / Fill / Fit+pad / Divisible crop) preprocesses visual references via the included Torch Resize before they reach H3.
+- **RESOLUTION PANEL:** Aspect / Resolution / Input scaling selectors (all default to **Auto**) drive the output canvas on MiniMax's 16-px grid — Auto aspect follows your first visual reference, Auto resolution sets a 768 px short side, plus fixed aspect, MP and pixel presets with CUSTOM values. The dropdowns are grouped in columns (aspect by orientation, resolution by ###p / MP, ascending) and label the auto options **Native (ShortEdge 768px)** / **Native (ShortEdge 2048px)**. Input scaling (Off / Auto / Target / Fit / Fill / Fit+pad / Divisible crop) preprocesses visual references via the included Torch Resize before they reach H3.
+- **PROMPT MODE TOGGLE:** a Simple / Structured switch in the mode bar changes how builder fields are assembled into the final prompt — Structured keeps the labelled sections, Simple renders one flat block. The choice is persisted in the workflow and honored by **Preview Prompt**.
+- **FRAME RATE:** a `frame_rate` FLOAT input (0.1–240, default 24) sets the output FPS and is also emitted as a `frame_rate` output so downstream nodes can read the effective value.
+- **CROP PREVIEW:** a ▶ Play crop button previews only the current crop range, and the preview crop range itself is draggable for quick scrubbing.
+- **PASTE-REPLACE:** Ctrl+V onto a selected media tile replaces that tile in place, preserving its slot position instead of appending.
 - **EXTERNAL OVERWRITE INPUTS:** optional `external_prompt_overwrite` (STRING) replaces the assembled builder output; connect both `external_width_overwrite` and `external_height_overwrite` (INT) to replace the Director canvas and bypass its sizing and input preprocessing entirely.
 
 [Full documentation, UI guide, and prompting reference →](docs/minimax_h3_director.md)
@@ -37,6 +41,22 @@ An approximate, model-scoped whole-block-stack residual cache for ComfyUI's nati
 
 [Full documentation, usage, compatibility, and provenance →](docs/minimax_h3_cache.md)
 
+---
+
+### 🔥 Patch Comfy Kitchen Attention
+
+A one-input model patch that swaps the connected model's attention backend to Comfy Kitchen INT8 attention at runtime.
+
+- **Model-scoped:** clones only the connected `MODEL` and sets its optimized-attention override; it never monkey-patches ComfyUI globally.
+- **Safe fallback:** if Comfy Kitchen INT8 attention is unavailable in your ComfyUI build, it falls back to the ComfyUI default attention and logs the decision.
+- **Chainable:** works before or after **MiniMax H3 Cache** — both are model-clone patches and compose in either order.
+
+```text
+MiniMax H3 Model Loader
+          │
+          ▼
+MiniMax H3 Cache ──► Patch Comfy Kitchen Attention ──► Guider / Sampler
+```
 
 ---
 
@@ -170,6 +190,29 @@ A professional-grade watermark tool optimized for image and video batches. It us
 ![DaSiWa-Watermark.png](assets/DaSiWa-Watermark.png)
 
 [Full documentation →](docs/watermark.md)
+
+---
+
+### 🩹 Inpaint Crop Prep & Composite
+
+A two-node crop-inpaint-composite pair for any inpainting model. **Inpaint Crop Prep** tight-crops to the mask and scales it for a high-res inpainter; **Inpaint Composite** blends the result back onto the original image.
+
+- **Crop Prep:** Gaussian-blurs the mask, extracts its bounding box (with configurable `grow_px` padding), crops image + mask, and bicubic-scales both to `target_width` × `target_height`. Emits `cropped_image`, `cropped_mask`, and the original-space `bbox_x/y/w/h` so you can composite back. `can_shrink` (default on) allows downscaling; turn it off to keep the crop at least its native size.
+- **Composite:** pastes the inpainted `source` patch back at `(x, y)` with the (auto-rescaled) mask, applying optional **Match Channels** or **Histogram** color correction against the destination region for a seamless blend.
+- **Pure PyTorch:** separable Gaussian blur, bicubic resampling, and channel-statistics color matching with no torchvision or extra dependencies.
+
+Wiring:
+
+```text
+IMAGE + MASK ──► Inpaint Crop Prep ──► (cropped_image, cropped_mask)
+                                     ──► any inpainter ──► source patch
+IMAGE ───────────────────────────────────────────────┐
+                                                     ▼
+                                  Inpaint Composite (x, y, w, h from Crop Prep)
+                                                     │
+                                                     ▼
+                                                   IMAGE
+```
 
 ---
 
