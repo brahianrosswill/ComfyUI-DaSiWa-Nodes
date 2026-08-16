@@ -33,6 +33,10 @@ VISUAL_MARKERS = [
 ]
 AUDIO_MARKERS = ["fully_copy", "partially_copy", "reference", "weak_reference"]
 
+# Prompt-assembly styles. "structured" is the default and matches the official
+# sectioned format; "simple" flattens the same fields into one plain block.
+PROMPT_MODES = ("simple", "structured")
+
 
 def align_frame_count(n: int) -> int:
     """Snap frame count to 17k+5 grid."""
@@ -51,21 +55,6 @@ def snapped_seconds(seconds: float) -> float:
 def fmt_ss(seconds: float) -> str:
     """Format snapped seconds (e.g. '5.10')."""
     return f"{round(snapped_seconds(seconds) * 100) / 100:.2f}"
-
-
-def fmt_timestamp(sec: float) -> str:
-    """Format MM:SS.mmm timestamp."""
-    mm = int(sec // 60)
-    rest = sec - mm * 60
-    ss = int(rest)
-    mmm = round((rest - ss) * 1000)
-    if mmm == 1000:
-        mmm = 0
-        ss += 1
-    if ss == 60:
-        ss = 0
-        mm += 1
-    return f"{mm:02d}:{ss:02d}.{mmm:03d}"
 
 
 def default_builder_state(mode: str = "T2VA") -> dict:
@@ -104,16 +93,22 @@ def default_builder_state(mode: str = "T2VA") -> dict:
     }
 
 
-def build_base_prompt(state: dict) -> str:
-    """Generate prompt for T2VA/I2VA/FL2VA/L2VA using official guide format."""
-    mode = state.get("mode", "T2VA")
-    duration_s = state.get("duration", 5)
+def _base_field_values(state: dict) -> dict:
+    """Derive the base-mode (T2VA/I2VA/FL2VA/L2VA) prompt fields."""
     imd_raw = state.get("imd")
     imd = imd_raw.strip() if isinstance(imd_raw, str) else ""
     soundscape_raw = state.get("soundscape")
     soundscape = soundscape_raw.strip() if isinstance(soundscape_raw, str) else ""
     music_raw = state.get("music")
     music = music_raw.strip() if isinstance(music_raw, str) else "N/A"
+    return {"imd": imd, "soundscape": soundscape, "music": music}
+
+
+def build_base_prompt(state: dict) -> str:
+    """Generate prompt for T2VA/I2VA/FL2VA/L2VA using official guide format."""
+    mode = state.get("mode", "T2VA")
+    duration_s = state.get("duration", 5)
+    v = _base_field_values(state)
 
     S = fmt_ss(duration_s)
     head = ""
@@ -130,72 +125,136 @@ def build_base_prompt(state: dict) -> str:
                 f"<Picture 1> (from [Shot 1]) aligns with the {S}-second mark of the target video.")
 
     body = (
-        f"integrated_multimodal_description: {imd}\n\n"
-        f"overall_soundscape: {soundscape}\n\n"
-        f"non_diegetic_music: {music}"
+        f"integrated_multimodal_description: {v['imd']}\n\n"
+        f"overall_soundscape: {v['soundscape']}\n\n"
+        f"non_diegetic_music: {v['music']}"
     )
     return f"{head}\n\n{body}" if head else body
 
 
-def build_ref_prompt(state: dict) -> str:
-    """Generate REF2VA prompt from plain-text sections."""
+def _ref_field_values(state: dict) -> dict:
+    """Derive the six REF2VA prompt fields from v1 and/or v2 builder keys.
+
+    This is the single source of truth for REF2VA field derivation so the
+    structured and simple renderers (and prompt_payload) can never disagree.
+    """
     ref = state.get("ref", {})
 
-    def _str(v):
-        return v.strip() if isinstance(v, str) else ""
-
-    # Handle legacy v1 builder_state shapes by merging into v2 keys.
-    subject_definitions = _str(ref.get("subject_definitions"))
+    subject_definitions = _ensure_str(ref.get("subject_definitions"))
     if not subject_definitions:
         defs_raw = ref.get("subject_defs") or []
         if isinstance(defs_raw, list):
-            subject_definitions = "\n".join(_str(d["text"]) for d in defs_raw if isinstance(d, dict) and _str(d.get("text")))
+            subject_definitions = "\n".join(_ensure_str(d["text"]) for d in defs_raw if isinstance(d, dict) and _ensure_str(d.get("text")))
 
-    summary = _str(ref.get("summary"))
+    summary = _ensure_str(ref.get("summary"))
     if not summary:
         chosen = [t for t in TASK_TYPES if t in ref.get("summary_types", [])]
         types_str = " + ".join(chosen) or "reference generation"
-        summary_text = _str(ref.get("summary_text"))
+        summary_text = _ensure_str(ref.get("summary_text"))
         if summary_text:
             summary = f"[{types_str}] {summary_text}"
 
-    retention_analysis = _str(ref.get("retention_analysis"))
+    retention_analysis = _ensure_str(ref.get("retention_analysis"))
     if not retention_analysis:
         retention_rows = []
         for row in ref.get("retention", []):
-            label = _str(row.get("label"))
-            context = _str(row.get("context"))
-            marker = _str(row.get("marker"))
-            note = _str(row.get("note"))
+            label = _ensure_str(row.get("label"))
+            context = _ensure_str(row.get("context"))
+            marker = _ensure_str(row.get("marker"))
+            note = _ensure_str(row.get("note"))
             if not label or not marker:
                 continue
             ctx_part = f" ({context})" if context else ""
             retention_rows.append(f"{label}{ctx_part}: {marker} - {note}")
         retention_analysis = "\n".join(retention_rows)
 
-    detailed_description = _str(ref.get("detailed_description"))
+    detailed_description = _ensure_str(ref.get("detailed_description"))
     if not detailed_description:
-        style_line = _str(ref.get("style_line"))
-        detail = _str(ref.get("detail"))
+        style_line = _ensure_str(ref.get("style_line"))
+        detail = _ensure_str(ref.get("detail"))
         parts = [p for p in [style_line, detail] if p]
         detailed_description = "\n".join(parts)
 
-    soundscape = _str(ref.get("soundscape"))
+    soundscape = _ensure_str(ref.get("soundscape"))
     music_raw = ref.get("music")
     music = music_raw.strip() if isinstance(music_raw, str) else "N/A"
 
+    return {
+        "subject_definitions": subject_definitions,
+        "summary": summary,
+        "retention_analysis": retention_analysis,
+        "detailed_description": detailed_description,
+        "soundscape": soundscape,
+        "music": music,
+    }
+
+
+def build_ref_prompt(state: dict) -> str:
+    """Generate the structured (sectioned) REF2VA prompt."""
+    v = _ref_field_values(state)
     return (
-        f"subject_definitions:\n{subject_definitions}\n\n"
-        f"summary:\n{summary}\n\n"
-        f"retention_analysis:\n{retention_analysis}\n\n"
-        f"detailed_description:\n{detailed_description}\n\n"
-        f"overall_soundscape:\n{soundscape}\n\n"
-        f"non_diegetic_music:\n{music}"
+        f"subject_definitions:\n{v['subject_definitions']}\n\n"
+        f"summary:\n{v['summary']}\n\n"
+        f"retention_analysis:\n{v['retention_analysis']}\n\n"
+        f"detailed_description:\n{v['detailed_description']}\n\n"
+        f"overall_soundscape:\n{v['soundscape']}\n\n"
+        f"non_diegetic_music:\n{v['music']}"
     )
 
 
+def _prompt_mode(state: dict) -> str:
+    """Resolve the validated prompt-assembly style from the builder state."""
+    mode = state.get("prompt_mode") or "structured"
+    if not isinstance(mode, str):
+        return "structured"
+    mode = mode.strip().lower()
+    return mode if mode in PROMPT_MODES else "structured"
+
+
+def _simple_lines(state: dict) -> list[tuple[str, str]]:
+    """Collect the (header, value) pairs for the flat "simple" rendering.
+
+    Reuses the same field derivation as the structured renderers so both
+    styles always carry identical content.
+    """
+    if state.get("mode", "T2VA") == "REF2VA":
+        v = _ref_field_values(state)
+        return [
+            ("subject_definitions", v["subject_definitions"]),
+            ("summary", v["summary"]),
+            ("retention_analysis", v["retention_analysis"]),
+            ("detailed_description", v["detailed_description"]),
+            ("overall_soundscape", v["soundscape"]),
+            ("non_diegetic_music", v["music"]),
+        ]
+    v = _base_field_values(state)
+    return [
+        ("integrated_multimodal_description", v["imd"]),
+        ("overall_soundscape", v["soundscape"]),
+        ("non_diegetic_music", v["music"]),
+    ]
+
+
+def _build_simple_prompt(state: dict) -> str:
+    """Render the builder fields as one flat, unheadered prompt block.
+
+    Every non-empty field keeps its name so the result stays self-describing
+    and lossless; empty fields are skipped so a sparse state never emits
+    dead lines.
+    """
+    lines = [f"{header}: {value}" for header, value in _simple_lines(state) if value]
+    return "\n".join(lines)
+
+
 def build_prompt(state: dict) -> str:
-    """Mode-dispatched prompt assembly."""
+    """Mode-dispatched prompt assembly honoring the requested style.
+
+    ``prompt_mode`` selects the assembly style: "structured" (default) uses the
+    official sectioned layout; "simple" flattens the same fields into one
+    block. Both render identical content, so the toggle never loses data.
+    """
+    if _prompt_mode(state) == "simple":
+        return _build_simple_prompt(state)
     mode = state.get("mode", "T2VA")
     return build_ref_prompt(state) if mode == "REF2VA" else build_base_prompt(state)
 

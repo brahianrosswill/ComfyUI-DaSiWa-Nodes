@@ -158,7 +158,7 @@ class MiniMaxH3Director:
             validate_reference_limits(images=images, videos=videos, audios=audios)
 
         blocks = state.get("prompt_blocks", [])
-        if isinstance(external_prompt, str):
+        if isinstance(external_prompt, str) and external_prompt.strip():
             resolved = external_prompt
         else:
             resolved = build_prompt(merged)

@@ -31,7 +31,7 @@ function installStyles() {
   style.textContent += `.ds-h3-preview-overlay{position:fixed;inset:0;z-index:10001;display:flex;align-items:center;justify-content:center;background:rgba(8,10,14,.6)}.ds-h3-preview-panel{width:min(600px,90vw);max-height:85vh;display:flex;flex-direction:column;background:#111820;border:1px solid #40515e;border-radius:10px;overflow:hidden;box-shadow:0 8px 32px #000}.ds-h3-preview-header,.ds-h3-preview-meta{padding:8px 12px;background:#0d1217;color:#dbe7f0}.ds-h3-preview-header{display:flex;justify-content:space-between;border-bottom:1px solid #344452}.ds-h3-preview-body{padding:12px;background:#090d11;display:flex;justify-content:center}.ds-h3-preview-media{max-width:100%;max-height:40vh;object-fit:contain}.ds-h3-preview-controls{padding:8px 12px;background:#0d1217;display:flex;flex-direction:column;gap:6px}.ds-h3-preview-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;color:#9fb3c2}.ds-h3-preview-row input[type="number"]{width:60px;padding:2px 4px;background:#111a21;color:#dbe7f0;border:1px solid #40515e;border-radius:3px}.ds-h3-preview-row input[type="text"],.ds-h3-preview-row textarea{flex:1;min-width:150px;padding:3px 5px;background:#111a21;color:#dbe7f0;border:1px solid #40515e;border-radius:3px;font-size:11px}.ds-h3-preview-row textarea{resize:vertical;min-height:30px}.ds-h3-preview-meta{font-size:11px;color:#9fb3c2;border-top:1px solid #344452}`;
   style.textContent += `
     .ds-h3-docs{font-weight:700;min-width:26px;padding:4px 8px!important}.ds-h3-ruler{display:none}.ds-h3-clip.video{width:var(--clip-width)!important;min-width:180px!important}.ds-h3-clip-identity{position:absolute;left:5px;top:4px;z-index:5;padding:1px 4px;border-radius:3px;background:rgba(0,0,0,.65);color:#fff;font-size:10px;font-weight:700;pointer-events:none}.ds-h3-video-scale{position:absolute;left:12px;right:12px;top:27px;height:44px;pointer-events:none;opacity:.8;background:repeating-linear-gradient(90deg,rgba(216,174,245,.82) 0,rgba(216,174,245,.82) 1px,transparent 1px,transparent 12px),linear-gradient(transparent 48%,rgba(216,174,245,.7) 49%,rgba(216,174,245,.7) 52%,transparent 53%)}.ds-h3-prompt-panel{min-height:120px;overflow:visible}.ds-h3-prompt-field{position:relative;flex:none;min-height:90px}.ds-h3-prompt-panel .ds-h3-prompt-field>.ds-h3-prompt{height:100%;min-height:0;padding-bottom:16px;resize:none}.ds-h3-prompt-field-resizer{position:absolute;bottom:0;left:0;width:100%;height:12px;cursor:ns-resize;display:flex;justify-content:center;align-items:flex-end;padding-bottom:4px;box-sizing:border-box;z-index:2;touch-action:none}.ds-h3-prompt-field-resizer::after{content:"";width:40px;height:4px;background:rgba(255,255,255,.16);border-radius:2px}.ds-h3-prompt-field-resizer:hover::after,.ds-h3-prompt-field-resizer.active::after{background:rgba(141,215,255,.8)}
-    .ds-h3-video-stream-controls{position:absolute;right:5px;top:4px;z-index:7;display:flex;gap:3px}.ds-h3-clip.selected .ds-h3-video-stream-controls{right:24px}.ds-h3-video-stream-controls button{min-width:24px;padding:3px 6px!important;font-size:11px;line-height:14px;background:rgba(10,17,23,.85)!important}.ds-h3-video-stream-controls button.active{background:rgba(125,82,188,.9)!important;border-color:#d4b3ff;color:#fff}.ds-h3-lock-icon{position:absolute;right:4px;top:4px;z-index:8;font-size:13px;color:#f3c67a;text-shadow:0 0 4px rgba(0,0,0,.9);pointer-events:none}.ds-h3-edit-btn{position:absolute;right:5px;bottom:5px;z-index:7;font-size:14px;padding:3px 6px!important;border-radius:3px!important;background:rgba(20,35,45,.8)!important;border-color:rgba(100,150,180,.5)!important}.ds-h3-empty-slot{display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:#7eeba7;border:1.5px dashed #7eeba7;border-radius:6px;cursor:pointer;box-sizing:border-box;background:rgba(126,235,167,.06);transition:all .15s ease;pointer-events:auto}.ds-h3-empty-slot:hover{background:rgba(126,235,167,.18);border-color:#bff3d0;color:#d4ffe1;box-shadow:0 0 14px rgba(126,235,167,.45);transform:scale(1.02)}.ds-h3-timeline-lane.disabled .ds-h3-empty-slot{opacity:.15;cursor:not-allowed;pointer-events:none}.ds-h3-timeline-lane.audio .ds-h3-empty-slot{color:#5b8dd9;border-color:#5b8dd9;background:rgba(91,141,217,.06)}.ds-h3-timeline-lane.audio .ds-h3-empty-slot:hover{background:rgba(91,141,217,.18);border-color:#8bb4f0;color:#b3d4fc;box-shadow:0 0 14px rgba(91,141,217,.45)}.ds-h3-prompt-panel.disabled{opacity:.5;filter:grayscale(.55)}.ds-h3-prompt-panel.disabled textarea,.ds-h3-prompt-panel.disabled input,.ds-h3-prompt-panel.disabled button{pointer-events:none}.ds-h3-ext-note{font-weight:600;color:#7ec8f0}
+    .ds-h3-video-stream-controls{position:absolute;right:5px;top:4px;z-index:7;display:flex;gap:3px}.ds-h3-clip.selected .ds-h3-video-stream-controls{right:24px}.ds-h3-video-stream-controls button{min-width:24px;padding:3px 6px!important;font-size:11px;line-height:14px;background:rgba(10,17,23,.85)!important}.ds-h3-video-stream-controls button.active{background:rgba(125,82,188,.9)!important;border-color:#d4b3ff;color:#fff}.ds-h3-lock-icon{position:absolute;right:4px;top:4px;z-index:8;font-size:13px;color:#f3c67a;text-shadow:0 0 4px rgba(0,0,0,.9);pointer-events:none}.ds-h3-edit-btn{position:absolute;right:5px;bottom:5px;z-index:7;font-size:14px;padding:3px 6px!important;border-radius:3px!important;background:rgba(20,35,45,.8)!important;border-color:rgba(100,150,180,.5)!important}.ds-h3-empty-slot{display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:#7eeba7;border:1.5px dashed #7eeba7;border-radius:6px;cursor:pointer;box-sizing:border-box;background:rgba(126,235,167,.06);transition:all .15s ease;pointer-events:auto}.ds-h3-empty-slot:hover{background:rgba(126,235,167,.18);border-color:#bff3d0;color:#d4ffe1;box-shadow:0 0 14px rgba(126,235,167,.45);transform:scale(1.02)}.ds-h3-timeline-lane.disabled .ds-h3-empty-slot{opacity:.15;cursor:not-allowed;pointer-events:none}.ds-h3-timeline-lane.audio .ds-h3-empty-slot{color:#5b8dd9;border-color:#5b8dd9;background:rgba(91,141,217,.06)}.ds-h3-timeline-lane.audio .ds-h3-empty-slot:hover{background:rgba(91,141,217,.18);border-color:#8bb4f0;color:#b3d4fc;box-shadow:0 0 14px rgba(91,141,217,.45)}.ds-h3-prompt-panel.disabled{opacity:.5;filter:grayscale(.55)}.ds-h3-prompt-panel.disabled textarea,.ds-h3-prompt-panel.disabled input,.ds-h3-prompt-panel.disabled button{pointer-events:none}.ds-h3-ext-note{font-weight:600;color:#7ec8f0}.ds-h3-prompt-mode-btn{background:rgba(126,235,167,.10)!important;color:#bff3d0!important;border:1px solid rgba(126,235,167,.55)!important;box-shadow:0 0 8px rgba(126,235,167,.35);font-weight:600;border-radius:999px!important;white-space:nowrap}.ds-h3-prompt-mode-btn:hover{background:rgba(126,235,167,.22)!important;box-shadow:0 0 14px rgba(126,235,167,.6)}.ds-h3-global-prompt{min-height:140px}
   `;
   document.head.appendChild(style);
 }
@@ -39,7 +39,6 @@ function installStyles() {
 function parseState(value) { try { const s = JSON.parse(value || "{}"); return { ...DEFAULT_STATE, ...s, items: Array.isArray(s.items) ? s.items : [], prompt_blocks: Array.isArray(s.prompt_blocks) ? s.prompt_blocks : [] }; } catch { return structuredClone(DEFAULT_STATE); } }
 function viewUrl(path) { return api.apiURL(`/view?filename=${encodeURIComponent(path)}&type=input`); }
 function count(state, type) { return state.items.filter(i => i.enabled !== false && i.type === type).length; }
-function escapeText(text) { return String(text ?? ""); }
 function idFor(type, n) { return `${type}-${Date.now()}-${n}`; }
 function mediaTypeFor(file) {
   if (file.type.startsWith("image/")) return "image";
@@ -138,6 +137,45 @@ function install(node) {
   const timeline = document.createElement("div"); timeline.className = "ds-h3 ds-h3-root"; timeline.tabIndex = 0;
   const setStatus = (message, isError = false) => { status.textContent = message; status.classList.toggle("error", isError); };
   const emit = () => { builderState.mode = mode(); state.builder_state = builderState; dataWidget.value = JSON.stringify(state); dataWidget.callback?.(dataWidget.value); if (builderWidget) { builderWidget.value = JSON.stringify(builderState); builderWidget.callback?.(builderWidget.value); } node.graph?.setDirtyCanvas(true, true); };
+  const promptStyle = () => { const v = builderState?.prompt_mode; return v === "simple" || v === "structured" ? v : "structured"; };
+  function previewTextFor(m, external) {
+    if (external) {
+      const t = String(externalPromptWidget()?.value || "").trim();
+      return t || "(External prompt detected — the prompt is supplied by the upstream node at execution time.)";
+    }
+    const areas = timeline.querySelectorAll(".ds-h3-prompt-panel .ds-h3-prompt");
+    if (m === "REF2VA") {
+      const vals = []; areas.forEach(a => vals.push(String(a.value || "").trim()));
+      const subj = vals[0] || ""; const summ = vals[1] || ""; const ret = vals[2] || ""; const detail = vals[3] || ""; const sound = vals[4] || ""; const music = vals[5] || "N/A";
+      if (promptStyle() === "simple") {
+        const parts = [
+          subj ? `subject_definitions: ${subj}` : "",
+          summ ? `summary: ${summ}` : "",
+          ret ? `retention_analysis: ${ret}` : "",
+          detail ? `detailed_description: ${detail}` : "",
+          sound ? `overall_soundscape: ${sound}` : "",
+          `non_diegetic_music: ${music || "N/A"}`,
+        ].filter(Boolean);
+        return parts.join("\n");
+      }
+      return `subject_definitions:\n${subj}\n\nsummary:\n${summ}\n\nretention_analysis:\n${ret}\n\ndetailed_description:\n${detail}\n\noverall_soundscape:\n${sound}\n\nnon_diegetic_music:\n${music}`;
+    }
+    const imd = String(areas[0]?.value || "").trim(); const sound = String(areas[1]?.value || "").trim(); const music = String(areas[2]?.value || "N/A").trim();
+    let head = "";
+    if (m === "I2VA") head = "For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.";
+    else if (m === "FL2VA") head = "How the reference pictures align with the target video — Picture 1 (from Shot 1) aligns with the 0.00-second mark of the target video; Picture 2 (from Shot 2) aligns with the end mark of the target video.";
+    else if (m === "L2VA") head = "How the reference pictures align with the target video — <Picture 1> (from [Shot 1]) aligns with the end mark of the target video.";
+    if (promptStyle() === "simple") {
+      const parts = [
+        imd ? `integrated_multimodal_description: ${imd}` : "",
+        sound ? `overall_soundscape: ${sound}` : "",
+        `non_diegetic_music: ${music || "N/A"}`,
+      ].filter(Boolean);
+      return parts.join("\n");
+    }
+    const body = `integrated_multimodal_description: ${imd}\n\noverall_soundscape: ${sound}\n\nnon_diegetic_music: ${music}`;
+    return head ? `${head}\n\n${body}` : body;
+  }
   const allowNativeTextEditing = element => { ["pointerdown","mousedown","keydown","keypress","keyup","copy","cut","paste"].forEach(type => element.addEventListener(type, event => event.stopPropagation())); };
 
   function buildBaseForm(panel) {
@@ -219,67 +257,12 @@ function install(node) {
 
   function showPromptPreview() {
     const m = mode();
-    let promptText = "";
-    if (hasExternalPrompt()) {
-      promptText = String(externalPromptWidget()?.value || "");
-      if (!promptText.trim()) {
-        promptText = "(External prompt detected — the prompt is supplied by the upstream node at execution time.)";
-      }
-    } else if (m === "REF2VA") {
-      const areas = timeline.querySelectorAll(".ds-h3-prompt-panel .ds-h3-prompt");
-      const vals = [];
-      areas.forEach(a => vals.push(String(a.value || "").trim()));
-      const subj = vals[0] || "";
-      const summ = vals[1] || "";
-      const ret = vals[2] || "";
-      const detail = vals[3] || "";
-      const sound = vals[4] || "";
-      const music = vals[5] || "N/A";
-      promptText =
-`subject_definitions:
-${subj}
-
-summary:
-${summ}
-
-retention_analysis:
-${ret}
-
-detailed_description:
-${detail}
-
-overall_soundscape:
-${sound}
-
-non_diegetic_music:
-${music}`;
-    } else {
-      const areas = timeline.querySelectorAll(".ds-h3-prompt-panel .ds-h3-prompt");
-      const imd = String(areas[0]?.value || "").trim();
-      const sound = String(areas[1]?.value || "").trim();
-      const music = String(areas[2]?.value || "N/A").trim();
-      let head = "";
-      if (m === "I2VA") {
-        head = "For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.";
-      } else if (m === "FL2VA") {
-        head = "How the reference pictures align with the target video — Picture 1 (from Shot 1) aligns with the 0.00-second mark of the target video; Picture 2 (from Shot 2) aligns with the end mark of the target video.";
-      } else if (m === "L2VA") {
-        head = "How the reference pictures align with the target video — <Picture 1> (from [Shot 1]) aligns with the end mark of the target video.";
-      }
-      const body = `integrated_multimodal_description: ${imd}
-
-overall_soundscape: ${sound}
-
-non_diegetic_music: ${music}`;
-      promptText = head ? `${head}
-
-${body}` : body;
-    }
+    const promptText = previewTextFor(m, hasExternalPrompt());
     let overlay = document.createElement("div"); overlay.style.cssText = "position:fixed;inset:0;z-index:10002;display:flex;align-items:center;justify-content:center;background:rgba(8,10,14,.7);";
     overlay.onclick = event => { if (event.target === overlay) overlay.remove(); };
     const panel = document.createElement("div"); panel.style.cssText = "width:min(720px,90vw);max-height:85vh;display:flex;flex-direction:column;background:#111820;border:1px solid #40515e;border-radius:10px;overflow:hidden;box-shadow:0 8px 32px #000;";
     const header = document.createElement("div"); header.style.cssText = "padding:8px 12px;background:#0d1217;color:#dbe7f0;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #344452;";
-    header.innerHTML = `<span>Prompt Preview (${m}${hasExternalPrompt() ? " · external" : ""})</span><button title="Copy">📋</button>`;
+    header.innerHTML = `<span>Prompt Preview (${m} · ${promptStyle() === "simple" ? "simple" : "structured"}${hasExternalPrompt() ? " · external" : ""})</span><button title="Copy">📋</button>`;
     const copyBtn = header.querySelector("button");
     copyBtn.onclick = () => { navigator.clipboard.writeText(promptText).then(() => { copyBtn.textContent = "✓"; setTimeout(() => copyBtn.textContent = "📋", 1200); }).catch(() => { copyBtn.textContent = "×"; }); };
     const closeBtn = document.createElement("button"); closeBtn.textContent = "×"; closeBtn.style.cssText = "background:none;border:none;color:#fff;font-size:18px;cursor:pointer;padding:0 4px;"; closeBtn.onclick = () => overlay.remove(); header.appendChild(closeBtn);
@@ -531,6 +514,7 @@ ${body}` : body;
     const topRow = document.createElement("div"); topRow.className = "ds-h3-modebar"; topRow.style.flexWrap = "nowrap"; topRow.style.justifyContent = "space-between"; topRow.style.gap = "6px"; topRow.style.padding = "0"; topRow.style.border = "0"; topRow.style.background = "transparent";
     const modesSide = document.createElement("span"); modesSide.className = "ds-h3-actions"; modesSide.style.gap = "4px"; ["T2VA", "I2VA", "FL2VA", "L2VA", "REF2VA"].forEach(value => { const button = document.createElement("button"); button.textContent = value; button.classList.toggle("active", mode() === value); button.onclick = () => { if (modeWidget) { modeWidget.value = value; modeWidget.callback?.(value); } if (selectedLane === "audio" && value !== "REF2VA") selectedLane = "visual"; render(); }; modesSide.append(button); });
     const rightSide = document.createElement("span"); rightSide.className = "ds-h3-actions"; rightSide.style.gap = "4px"; const hasContent = state.items.length || state.prompt_blocks?.length || String(promptWidget?.value || "").trim(); if (hasContent) { const clearButton = document.createElement("button"); clearButton.className = "ds-h3-clear-btn"; clearButton.textContent = "Clear"; clearButton.title = "Remove all media and prompts"; clearButton.onclick = clearAll; rightSide.append(clearButton); } if (selected) { if (!isLockedSlot(selected)) { const removeButton = document.createElement("button"); removeButton.className = "ds-h3-remove-btn"; removeButton.textContent = "Remove"; removeButton.title = `Remove selected ${selected.type}`; removeButton.onclick = () => remove(selected.id); rightSide.append(removeButton); } else { setStatus(`${mediaReferenceName(selected.type)} ${selected.slot + 1} is locked in L2VA mode`, true); } } const docsButton = document.createElement("button"); docsButton.className = "ds-h3-docs"; docsButton.textContent = "?"; docsButton.title = "Open MiniMax H3 Director documentation on GitHub"; docsButton.onclick = () => window.open(REPOSITORY_URL, "_blank", "noopener,noreferrer"); rightSide.append(docsButton);
+    const styleButton = document.createElement("button"); styleButton.className = "ds-h3-prompt-mode-btn"; const styleLabel = promptStyle(); styleButton.textContent = `Prompt: ${styleLabel === "simple" ? "Simple" : "Structured"}`; styleButton.title = "Toggle how the builder fields are assembled into the final prompt"; styleButton.onclick = () => { builderState.prompt_mode = styleLabel === "simple" ? "structured" : "simple"; emit(); render(); }; rightSide.append(styleButton);
     topRow.append(modesSide, rightSide); modeGroup.append(topRow);
     const modeHint = { T2VA: "T2VA · no input frame", I2VA: "I2VA · one opening-frame slot", FL2VA: "FL2VA · opening and closing-frame slots", L2VA: "L2VA · one closing-frame slot" }; const hint = document.createElement("div"); hint.className = "ds-h3-mode-hint"; hint.style.fontSize = "11px"; hint.style.color = "#9fb3c2"; hint.style.margin = "0"; hint.textContent = modeHint[mode()] || `REF2VA · up to ${MAX.image} image, ${MAX.video} video, and ${MAX.audio} audio slots · ${MAX.total} combined files maximum`; modeGroup.append(hint);
     timeline.append(modeGroup);
@@ -571,44 +555,6 @@ ${body}` : body;
       const actions = document.createElement("div"); actions.className = "ds-h3-actions"; [["↑", () => move(item.id,-1)], ["↓", () => move(item.id,1)], ["replace", () => { const v = window.prompt("Replacement input path:", item.value); if (v?.trim()) replace(item.id, v.trim()); }], ["clear", () => remove(item.id)]].forEach(([label, fn]) => { const b = document.createElement("button"); b.textContent = label; b.onclick = fn; actions.append(b); }); if (mode() === "REF2VA" && item.type === "video") { const b = document.createElement("button"); b.textContent = item.audio ? "remove soundtrack" : "attach soundtrack"; b.onclick = () => { if (item.audio) mutate(s => { const x=s.items.find(i=>i.id===item.id); if(x){ x.audio=null; delete x.audio_duration; } }); else { const v=window.prompt("Soundtrack path relative to ComfyUI input:", ""); if(v?.trim()) mutate(s => { const x=s.items.find(i=>i.id===item.id); if(x) x.audio=v.trim(); }); } }; actions.append(b); } row.append(preview, middle, actions); list.append(row); }); timeline.append(list);
     // Prompt text is edited on the corresponding media row and synchronized to prompt_blocks.
     timeline.append(status); if (domWidget) domWidget.computeSize = () => [Math.max(420, node.size?.[0] || 520), uiHeight()];
-  };
-  const appendPromptField = (panel, editor, stateKey, getHeight, setHeight) => {
-    const field = document.createElement("div");
-    field.className = "ds-h3-prompt-field";
-    field.style.height = `${getHeight()}px`;
-    const resizer = document.createElement("div");
-    resizer.className = "ds-h3-prompt-field-resizer";
-    resizer.title = "Drag to resize this prompt field";
-    resizer.setAttribute("role", "separator");
-    resizer.setAttribute("aria-label", "Resize prompt field");
-    resizer.addEventListener("mousedown", event => {
-      event.preventDefault();
-      event.stopPropagation();
-      const startY = event.clientY;
-      const startHeight = getHeight();
-      resizer.classList.add("active");
-      const drag = moveEvent => {
-        if (moveEvent.buttons === 0) return finish();
-        const height = Math.max(90, Math.min(640, startHeight + moveEvent.clientY - startY));
-        setHeight(height);
-        field.style.height = `${height}px`;
-        syncNodeBounds();
-      };
-      const finish = () => {
-        window.removeEventListener("mousemove", drag, true);
-        window.removeEventListener("mouseup", finish, true);
-        document.body.style.cursor = "default";
-        resizer.classList.remove("active");
-        state[stateKey] = getHeight();
-        emit();
-        syncNodeBounds();
-      };
-      document.body.style.cursor = "ns-resize";
-      window.addEventListener("mousemove", drag, true);
-      window.addEventListener("mouseup", finish, true);
-    });
-    field.append(editor, resizer);
-    panel.append(field);
   };
   let domWidget;
   const uiHeight = () => Math.max(850, 500 + mediaPromptHeight + globalPromptHeight);

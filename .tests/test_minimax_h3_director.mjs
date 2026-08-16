@@ -12,12 +12,12 @@ source += "\nexport { mediaTypeFor, REPOSITORY_URL };";
 assert.match(source, /lane\.ondrop = event => \{ if \(!supported\)/, "each timeline lane must own its direct drop handler");
 assert.match(source, /acceptLaneDrop\(event, targetLane\)/, "supported lane drops must use the direct lane upload path");
 assert.match(source, /resizer\.className = "ds-h3-prompt-field-resizer"/, "each prompt field must expose a bottom resize grabber");
-assert.match(source, /field\.append\(editor, resizer\)/, "the resize grabber must live inside the prompt field");
+assert.match(source, /wrapper\.appendChild\(resizer\)/, "the resize grabber must live inside the prompt field");
 assert.match(source, /\.ds-h3\{box-sizing:border-box[^`]*background:transparent;border:0;border-radius:0;padding:0/, "the Director UI must render directly on the node without an outer panel");
 assert.doesNotMatch(source, /promptPanelHeight/, "restoring a workflow must not reference the removed prompt-panel divider state");
-assert.match(source, /FL2VA supports image references only; the audio lane is disabled\./, "unsupported drops must show an explicit FL2VA error");
+assert.match(source, /FL2VA supports image references only; video and audio are unavailable\./, "unsupported drops must show an explicit FL2VA error");
 assert.match(source, /ds-h3-timeline-lane \$\{targetLane\}[^`]*\$\{supported \? "" : " disabled"\}/, "unsupported lanes must be visibly blocked");
-assert.match(source, /removeButton\.textContent = "🗑 Remove"/, "selected media must have a toolbar remove button");
+assert.match(source, /removeButton\.textContent = "Remove"/, "selected media must have a toolbar remove button");
 assert.match(source, /close\.className = "ds-h3-clip-close"/, "selected media must have a clip-corner remove button");
 assert.doesNotMatch(source, /Remove selected media item/, "the old prompt-panel remove button must be absent");
 assert.match(source, /\.ds-h3-prompt-panel\{width:100%;box-sizing:border-box;border:0;border-radius:0;padding:0/, "prompt fields must not sit inside another framed panel");
@@ -37,6 +37,12 @@ assert.match(source, /ds-h3-audio-crop-marker end/, "audio clips must draw a cro
 assert.match(source, /Math\.log1p\(9 \* peaks\[peakIndex\]\)/, "audio waveform amplitudes must use logarithmic scaling");
 assert.doesNotMatch(source, /if \(item\.type === "audio"\) return; if \(event\.target !== clip\) return;/, "audio slots must be horizontally movable");
 assert.match(source, /window\.open\(REPOSITORY_URL, "_blank", "noopener,noreferrer"\)/, "the help button must open the GitHub documentation safely");
+assert.match(source, /const promptStyle = \(\) => \{ const v = builderState\?\.prompt_mode;/, "the builder must expose a validated prompt-style accessor");
+assert.match(source, /styleButton\.className = "ds-h3-prompt-mode-btn"/, "the mode bar must render a prompt-style toggle button");
+assert.match(source, /builderState\.prompt_mode = styleLabel === "simple" \? "structured" : "simple"/, "the toggle must flip between the simple and structured styles");
+assert.match(source, /\.ds-h3-prompt-mode-btn\{[^`]*box-shadow:0 0 8px rgba\(126,235,167/, "the prompt-style toggle must use the green-glow accent");
+assert.match(source, /function showPromptPreview\(\) \{[\s\S]*?const promptText = previewTextFor\(m, hasExternalPrompt\(\)\);/, "the prompt preview must render the selected style");
+assert.doesNotMatch(source, /builderState\.prompt_mode = styleLabel === "structured" \? "simple" : "structured"/, "the toggle must not invert the wrong way");
 
 const moduleUrl = `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
 const { mediaTypeFor, REPOSITORY_URL } = await import(moduleUrl);

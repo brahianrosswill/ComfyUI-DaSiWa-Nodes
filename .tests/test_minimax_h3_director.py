@@ -8,7 +8,9 @@ import numpy as np
 import pytest
 
 from nodes.helper_minimax_h3_director import audio_duration, load_audio, load_embedded_video_audio, load_video
-from nodes.helper_minimax_h3_prompt_builder import build_prompt, default_builder_state
+from nodes.helper_minimax_h3_prompt_builder import (
+    PROMPT_MODES, build_base_prompt, build_prompt, build_ref_prompt, default_builder_state,
+)
 from nodes import nodes_minimax_h3_director as director
 from nodes import nodes_minimax_h3_director_guide as director_guide
 
@@ -71,6 +73,120 @@ def test_director_emits_v2_consolidated_prompt_for_i2va_builder_state():
     assert fl2va_requested and not ref2va_requested
 
 
+def test_director_blank_external_prompt_falls_back_to_builder():
+    """Structured mode: a blank/whitespace external prompt must not bypass the builder."""
+    builder = default_builder_state("T2VA")
+    builder.update({"imd": "[Shot 1] A calm lake at dawn.", "soundscape": "light wind", "music": "N/A"})
+
+    def resolved_for(external_prompt):
+        return director.MiniMaxH3Director().build_guide(
+            "T2VA", "", 1344, 768, 5, "match", json.dumps({"items": []}),
+            json.dumps(builder), None, None, external_prompt=external_prompt
+        )[2]
+
+    # Blank string and whitespace-only must both resolve via the builder (non-empty).
+    for blank in ("", "   "):
+        fallback = resolved_for(blank)
+        assert fallback != blank
+        assert "integrated_multimodal_description: [Shot 1] A calm lake at dawn." in fallback
+
+    # A real external prompt still overrides the builder.
+    assert resolved_for("MY OWN PROMPT") == "MY OWN PROMPT"
+
+
+def test_prompt_modes_constant_lists_both_styles():
+    assert set(PROMPT_MODES) == {"simple", "structured"}
+
+
+def test_base_mode_defaults_to_structured_when_prompt_mode_absent():
+    state = default_builder_state("FL2VA")
+    state.update({"imd": "[Shot 1] A lantern rises.", "soundscape": "wind", "music": "N/A"})
+    prompt = build_prompt(state)
+    # structured = the official sectioned layout (with the FL2VA alignment head).
+    assert "How the reference pictures align" in prompt
+    assert "integrated_multimodal_description: [Shot 1] A lantern rises." in prompt
+    # simple would not carry the alignment head.
+    assert prompt == build_base_prompt(state)
+
+
+def test_base_mode_simple_flattens_fields_without_alignment_head():
+    state = default_builder_state("FL2VA")
+    state.update({"imd": "[Shot 1] A lantern rises.", "soundscape": "wind", "music": "N/A", "prompt_mode": "simple"})
+    prompt = build_prompt(state)
+    assert "How the reference pictures align" not in prompt
+    assert "integrated_multimodal_description: [Shot 1] A lantern rises." in prompt
+    assert "overall_soundscape: wind" in prompt
+    assert "non_diegetic_music: N/A" in prompt
+    # simple keeps one header per line, no blank-line sectioning.
+    assert "\n\n" not in prompt
+
+
+def test_prompt_mode_simple_is_lossless_vs_structured_fields():
+    """Every non-empty field present in structured must appear in simple."""
+    state = default_builder_state("FL2VA")
+    state.update({"imd": "[Shot 1] A lantern rises.", "soundscape": "wind and birds", "music": "soft strings"})
+    structured = build_prompt(state)
+    simple = build_prompt({**state, "prompt_mode": "simple"})
+    for field in ("[Shot 1] A lantern rises.", "wind and birds", "soft strings"):
+        assert field in structured
+        assert field in simple
+
+
+def test_ref2va_mode_simple_flattens_sectioned_layout():
+    state = default_builder_state("REF2VA")
+    state["ref"].update({
+        "subject_definitions": "<Subject 1> is a red fox.",
+        "summary": "[reference generation] Animate the fox.",
+        "retention_analysis": "<Subject 1>: fully_preserved - keep fur",
+        "detailed_description": "Cinematic. [Shot 1] The fox turns.",
+        "soundscape": "forest", "music": "N/A",
+    })
+    structured = build_prompt(state)
+    simple = build_prompt({**state, "prompt_mode": "simple"})
+    # structured keeps the sectioned "header:\nvalue" layout.
+    assert "subject_definitions:\n<Subject 1> is a red fox." in structured
+    # simple flattens to "header: value" on one line each.
+    assert "subject_definitions: <Subject 1> is a red fox." in simple
+    assert "summary: [reference generation] Animate the fox." in simple
+    assert "retention_analysis: <Subject 1>: fully_preserved - keep fur" in simple
+    # and simple drops the multi-line sectioning.
+    assert "subject_definitions:\n" not in simple
+
+
+def test_prompt_mode_invalid_or_non_string_falls_back_to_structured():
+    state = default_builder_state("T2VA")
+    state.update({"imd": "A room.", "soundscape": "quiet", "music": "N/A"})
+    assert build_prompt({**state, "prompt_mode": "bogus"}) == build_prompt(state)
+    assert build_prompt({**state, "prompt_mode": 5}) == build_prompt(state)
+    assert build_prompt({**state, "prompt_mode": None}) == build_prompt(state)
+    # case-insensitive + whitespace-tolerant.
+    assert build_prompt({**state, "prompt_mode": "  Simple  "}) == build_prompt({**state, "prompt_mode": "simple"})
+
+
+def test_director_end_to_end_honors_prompt_mode_from_builder_state():
+    base = default_builder_state("T2VA")
+    base.update({"imd": "[Shot 1] A calm lake at dawn.", "soundscape": "light wind", "music": "N/A"})
+
+    def resolved_with(prompt_mode):
+        builder = dict(base)
+        if prompt_mode is not None:
+            builder["prompt_mode"] = prompt_mode
+        return director.MiniMaxH3Director().build_guide(
+            "T2VA", "", 1344, 768, 5, "match", json.dumps({"items": []}),
+            json.dumps(builder), None, None,
+        )[2]
+
+    structured = resolved_with("structured")
+    simple = resolved_with("simple")
+    # default (absent) == structured, backward compatible.
+    assert resolved_with(None) == structured
+    # structured keeps the sectioned body, simple does not carry double-newlines.
+    assert "integrated_multimodal_description: [Shot 1] A calm lake at dawn." in structured
+    assert "\n\n" in structured
+    assert "integrated_multimodal_description: [Shot 1] A calm lake at dawn." in simple
+    assert "\n\n" not in simple
+
+
 def test_guider_routes_l2va_to_image_to_video_with_only_last_frame(monkeypatch):
     calls = []
 
@@ -93,7 +209,7 @@ def test_director_ui_exposes_the_derived_frame_slots():
 
     assert 'mode() === "I2VA" ? [0]' in source
     assert 'mode() === "FL2VA" ? [0, 1]' in source
-    assert 'mode() === "L2VA" ? [1]' in source
+    assert 'mode() === "L2VA" ? [0, 1]' in source
     assert 'mode() === "T2VA" ? []' in source
 
 
@@ -101,7 +217,7 @@ def test_director_preview_overlay_is_clickable_and_closes_with_escape():
     source = Path("js/minimax_h3_director.js").read_text()
 
     assert "function openPreview(item)" in source
-    assert "function closePreview()" in source
+    assert "function closePreview(discard = false)" in source
     assert 'previewCloseFn = event => { if (event.key === "Escape") closePreview(); };' in source
     assert "openPreview(item);" in source
 
