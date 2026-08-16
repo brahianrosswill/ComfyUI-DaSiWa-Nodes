@@ -288,7 +288,7 @@ class MiniMaxH3Cache:
 
     RETURN_TYPES = ("MODEL",)
     FUNCTION = "patch"
-    CATEGORY = "DaSiWa Nodes/MiniMax H3"
+    CATEGORY = "DaSiWa/MiniMax H3"
     DESCRIPTION = "Approximate whole-block-stack residual cache for MiniMax H3. Higher thresholds skip more work and may reduce fidelity."
 
     def patch(self, model, reuse_threshold, start_percent, end_percent, max_steps, device, verbose):

@@ -61,7 +61,7 @@ Install dependencies and restart ComfyUI:
 pip install -r requirements.txt
 ```
 
-Ensure your ComfyUI version includes native MiniMax H3 support. Add these two nodes from `DaSiWa Nodes/MiniMax H3`:
+Ensure your ComfyUI version includes native MiniMax H3 support. Add these two nodes from `DaSiWa/MiniMax H3`:
 
 1. **MiniMax H3 Director** — your timeline, references, and prompt editor.
 2. **MiniMax H3 Director Guide** — validation and routing to native H3 nodes.

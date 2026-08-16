@@ -48,7 +48,7 @@ class MiniMaxH3DirectorGuide:
     RETURN_TYPES = ("CONDITIONING", "LATENT")
     RETURN_NAMES = ("positive", "latent")
     FUNCTION = "apply"
-    CATEGORY = "DaSiWa Nodes/MiniMax H3"
+    CATEGORY = "DaSiWa/MiniMax H3"
 
     def apply(self, clip, vae, guide, audio_vae=None):
         state = normalize_guide(guide)

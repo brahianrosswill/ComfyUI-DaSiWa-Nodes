@@ -48,7 +48,7 @@ class MiniMaxH3Director:
     RETURN_TYPES = ("MINIMAX_H3_DIRECTOR_GUIDE", "INT", "STRING", "INT", "INT", "MODEL", "BOOLEAN", "BOOLEAN", "FLOAT")
     RETURN_NAMES = ("guide", "duration", "positive_prompt", "width", "height", "model", "fl2va_requested", "ref2va_requested", "frame_rate")
     FUNCTION = "build_guide"
-    CATEGORY = "DaSiWa Nodes/MiniMax H3"
+    CATEGORY = "DaSiWa/MiniMax H3"
 
     def check_lazy_status(self, mode, prompt, width, height, duration, ref_image_size, timeline_data, builder_state,
                           fl2va_model=None, ref2va_model=None, external_width_overwrite=None,
