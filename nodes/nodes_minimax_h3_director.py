@@ -31,6 +31,7 @@ class MiniMaxH3Director:
                 "width": ("INT", {"default": 1344, "min": 16, "max": 8192, "step": 16}),
                 "height": ("INT", {"default": 768, "min": 16, "max": 8192, "step": 16}),
                 "duration": ("INT", {"default": 5, "min": 1, "max": 1000}),
+                "frame_rate": ("FLOAT", {"default": 24.0, "min": 0.1, "max": 240.0, "step": 0.01}),
                 "ref_image_size": (["match", "max"], {"default": "match"}),
                 "timeline_data": ("STRING", {"default": "{\"version\":1,\"items\":[],\"prompt_blocks\":[]}", "multiline": False, "hidden": True}),
                 "builder_state": ("STRING", {"default": "", "multiline": False, "hidden": True}),
@@ -44,21 +45,21 @@ class MiniMaxH3Director:
             },
         }
 
-    RETURN_TYPES = ("MINIMAX_H3_DIRECTOR_GUIDE", "INT", "STRING", "INT", "INT", "MODEL", "BOOLEAN", "BOOLEAN")
-    RETURN_NAMES = ("guide", "duration", "positive_prompt", "width", "height", "model", "fl2va_requested", "ref2va_requested")
+    RETURN_TYPES = ("MINIMAX_H3_DIRECTOR_GUIDE", "INT", "STRING", "INT", "INT", "MODEL", "BOOLEAN", "BOOLEAN", "FLOAT")
+    RETURN_NAMES = ("guide", "duration", "positive_prompt", "width", "height", "model", "fl2va_requested", "ref2va_requested", "frame_rate")
     FUNCTION = "build_guide"
     CATEGORY = "DaSiWa Nodes/MiniMax H3"
 
     def check_lazy_status(self, mode, prompt, width, height, duration, ref_image_size, timeline_data, builder_state,
                           fl2va_model=None, ref2va_model=None, external_width_overwrite=None,
-                          external_height_overwrite=None, external_prompt_overwrite=None, external_prompt=None):
+                          external_height_overwrite=None, external_prompt_overwrite=None, frame_rate=24.0):
         selected_name = "ref2va_model" if mode == "REF2VA" else "fl2va_model"
         selected_model = ref2va_model if mode == "REF2VA" else fl2va_model
         return [selected_name] if selected_model is None else []
 
     def build_guide(self, mode, prompt, width, height, duration, ref_image_size, timeline_data, builder_state="",
                     fl2va_model=None, ref2va_model=None, external_width_overwrite=None,
-                    external_height_overwrite=None, external_prompt_overwrite=None, external_prompt=None):
+                    external_height_overwrite=None, external_prompt_overwrite=None, frame_rate=24.0):
         # Preserve direct Python callers that used the pre-builder positional model argument.
         if builder_state is not None and not isinstance(builder_state, str):
             if fl2va_model is None:
@@ -68,6 +69,9 @@ class MiniMaxH3Director:
                 raise ValueError("builder_state must be JSON text")
         if mode not in BASE_MODES | {"REF2VA"}:
             raise ValueError(f"unsupported MiniMax Director mode: {mode}")
+        frame_rate = float(frame_rate)
+        if not 0.1 <= frame_rate <= 240.0:
+            raise ValueError("MiniMax Director frame_rate must be between 0.1 and 240")
         external_canvas = external_width_overwrite is not None or external_height_overwrite is not None
         if external_canvas:
             if external_width_overwrite is None or external_height_overwrite is None:
@@ -173,9 +177,8 @@ class MiniMaxH3Director:
             validate_reference_limits(images=images, videos=videos, audios=audios)
 
         blocks = state.get("prompt_blocks", [])
-        prompt_overwrite = external_prompt_overwrite if external_prompt_overwrite is not None else external_prompt
-        if isinstance(prompt_overwrite, str) and prompt_overwrite.strip():
-            resolved = prompt_overwrite
+        if isinstance(external_prompt_overwrite, str) and external_prompt_overwrite.strip():
+            resolved = external_prompt_overwrite
         else:
             resolved = build_prompt(merged)
             if not any(str(merged.get(key) or "").strip() for key in ("imd", "soundscape")) and mode != "REF2VA":
@@ -192,8 +195,8 @@ class MiniMaxH3Director:
         }
         normalize_guide(guide)
         selected_model = ref2va_model if mode == "REF2VA" else fl2va_model
-        log_dasiwa("MiniMax H3 Director", f"mode={mode}; requested_model={'ref2va_model' if mode == 'REF2VA' else 'fl2va_model'}; passed_model={_describe_model(selected_model)}; canvas={width}x{height}; frames={length}; refs=images:{len(ref_images)},videos:{len(ref_videos)},video_audio:{len(ref_video_audios)},audio:{len(ref_audios)}; timeline_items={len(items)}")
-        return guide, length, resolved, int(width), int(height), selected_model, mode in BASE_MODES, mode == "REF2VA"
+        log_dasiwa("MiniMax H3 Director", f"mode={mode}; requested_model={'ref2va_model' if mode == 'REF2VA' else 'fl2va_model'}; passed_model={_describe_model(selected_model)}; canvas={width}x{height}; frames={length}; fps={frame_rate}; refs=images:{len(ref_images)},videos:{len(ref_videos)},video_audio:{len(ref_video_audios)},audio:{len(ref_audios)}; timeline_items={len(items)}")
+        return guide, length, resolved, int(width), int(height), selected_model, mode in BASE_MODES, mode == "REF2VA", frame_rate
 
 
 NODE_CLASS_MAPPINGS = {"MiniMaxH3Director": MiniMaxH3Director}

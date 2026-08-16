@@ -86,7 +86,7 @@ def test_director_emits_v2_consolidated_prompt_for_i2va_builder_state():
     builder = default_builder_state("I2VA")
     builder.update({"imd": "A bright room.", "soundscape": "birds", "music": "N/A"})
 
-    guide, _, resolved, _, _, _, fl2va_requested, ref2va_requested = director.MiniMaxH3Director().build_guide(
+    guide, _, resolved, _, _, _, fl2va_requested, ref2va_requested, _ = director.MiniMaxH3Director().build_guide(
         "I2VA", "legacy", 1344, 768, 5, "match", json.dumps(state), json.dumps(builder)
     )
 
@@ -103,10 +103,10 @@ def test_director_blank_external_prompt_falls_back_to_builder():
     builder = default_builder_state("T2VA")
     builder.update({"imd": "[Shot 1] A calm lake at dawn.", "soundscape": "light wind", "music": "N/A"})
 
-    def resolved_for(external_prompt):
+    def resolved_for(external_prompt_overwrite):
         return director.MiniMaxH3Director().build_guide(
             "T2VA", "", 1344, 768, 5, "match", json.dumps({"items": []}),
-            json.dumps(builder), None, None, external_prompt=external_prompt
+            json.dumps(builder), None, None, external_prompt_overwrite=external_prompt_overwrite
         )[2]
 
     # Blank string and whitespace-only must both resolve via the builder (non-empty).
@@ -291,6 +291,44 @@ def test_director_uses_the_native_h3_frame_grid_for_guide_and_output_length():
 
     assert guide["length"] == 124
     assert output_length == 124
+
+
+def test_director_exposes_frame_rate_output_and_validates_range():
+    node = director.MiniMaxH3Director()
+
+    # Default frame_rate is 24 and is emitted as the final output.
+    *_, default_fps = node.build_guide("FL2VA", "", 1344, 768, 5, "match", "{}")
+    assert default_fps == 24.0
+    assert isinstance(default_fps, float)
+
+    # A selected frame_rate passes straight through to the output.
+    *_, chosen_fps = node.build_guide("FL2VA", "", 1344, 768, 5, "match", "{}", frame_rate=60)
+    assert chosen_fps == 60.0
+
+    # Fractional rates pass through, while the declared bounds are enforced.
+    *_, fractional = node.build_guide("FL2VA", "", 1344, 768, 5, "match", "{}", frame_rate=23.976)
+    assert fractional == 23.976
+    *_, low = node.build_guide("FL2VA", "", 1344, 768, 5, "match", "{}", frame_rate=0.1)
+    assert low == 0.1
+    *_, high = node.build_guide("FL2VA", "", 1344, 768, 5, "match", "{}", frame_rate=240)
+    assert high == 240.0
+    for out_of_range in (0.09, 240.01):
+        with pytest.raises(ValueError, match="frame_rate must be between 0.1 and 240"):
+            node.build_guide("FL2VA", "", 1344, 768, 5, "match", "{}", frame_rate=out_of_range)
+
+
+def test_director_input_types_declare_frame_rate_directly_under_duration():
+    required = director.MiniMaxH3Director.INPUT_TYPES()["required"]
+    assert required["frame_rate"] == ("FLOAT", {"default": 24.0, "min": 0.1, "max": 240.0, "step": 0.01})
+    keys = list(required)
+    # The widget must render directly beneath duration in the node UI.
+    assert keys.index("frame_rate") == keys.index("duration") + 1
+
+
+def test_director_keeps_only_external_prompt_overwrite_as_its_prompt_input():
+    optional = director.MiniMaxH3Director.INPUT_TYPES()["optional"]
+    assert "external_prompt_overwrite" in optional
+    assert "external_prompt" not in optional
 
 
 def test_fl2va_slot_two_without_slot_one_is_the_closing_frame():
