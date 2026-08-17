@@ -1,4 +1,6 @@
 """Regression tests for Director prompt migration and standard prompt output."""
+import json
+
 from nodes.helper_minimax_h3_prompt_builder import (
     build_prompt,
     default_builder_state,
@@ -32,3 +34,79 @@ def test_frontend_keeps_standard_prompt_widget_serialized():
     assert "promptWidget.value = resolved" in source
     assert "promptWidget.callback?.(resolved)" in source
     assert "state.resolved_prompt = resolved" in source
+
+
+def _required_order():
+    """Return the widget names in the exact order ComfyUI's positional loader
+    assigns them, which is the INPUT_TYPES iteration order (required first)."""
+    schema = MiniMaxH3Director.INPUT_TYPES()
+    names = []
+    for section in ("required", "optional"):
+        for key in schema.get(section, {}):
+            if key in ("fl2va_model", "ref2va_model",
+                       "external_width_overwrite", "external_height_overwrite",
+                       "external_prompt_overwrite"):
+                continue  # sockets, not widgets
+            names.append(key)
+    return names
+
+
+def _load_old_widgets_values(values):
+    """Positionally map a saved widgets_values array onto the current node's
+    widget slots, exactly as the ComfyUI graph loader does."""
+    order = _required_order()
+    node = MiniMaxH3Director()
+    positional = {key: values[i] for i, key in enumerate(order[: len(values)])}
+    # Sockets / optional widgets not present in the old save keep their defaults.
+    return node, positional
+
+
+def _real_ref2va_builder_state():
+    """A minimal v1 builder_state carrying real REF2VA content (the kind that
+    lives in the embedded metadata of the old videos)."""
+    return json.dumps({
+        "version": 1,
+        "mode": "REF2VA",
+        "ref": {
+            "subject_defs": [{"text": "a red sandstone lion"}],
+            "summary_text": "transfer the lion's mane texture onto the character",
+            "summary_types": ["reference generation"],
+            "retention": [],
+            "style_line": "",
+            "detail": "",
+        },
+    })
+
+
+def test_old_9_value_save_loads_without_crashing_and_preserves_prompt():
+    """A save from before frame_rate was a required input has 9 widgets_values
+    where position 8 is the removed external_prompt widget (''). After the
+    reordering, that stale value lands on frame_rate and must not crash the
+    queue; the real builder_state (position 7) must round-trip to a prompt."""
+    node, kwargs = _load_old_widgets_values([
+        "REF2VA", "", 1344, 768, 5, "match",
+        json.dumps({"version": 1, "items": [], "prompt_blocks": []}),
+        _real_ref2va_builder_state(),
+        "",  # stale 9th value: was external_prompt, now lands on frame_rate
+    ])
+
+    guide, *_ , out_frame_rate = node.build_guide(
+        **{**kwargs, "frame_rate": kwargs.get("frame_rate", 24.0)}
+    )
+
+    # The stale value is coerced to the default instead of raising.
+    assert out_frame_rate == 24.0
+    # The builder_state is reachable and produced a non-empty prompt.
+    assert guide["resolved_prompt"].strip()
+    assert "lion" in guide["resolved_prompt"]
+
+
+def test_out_of_range_frame_rate_still_raises():
+    node = MiniMaxH3Director()
+    try:
+        node.build_guide("REF2VA", "", 1344, 768, 5, "match", "{}", "",
+                         frame_rate=9999.0)
+    except ValueError:
+        return
+    raise AssertionError("expected ValueError for out-of-range frame_rate")
+

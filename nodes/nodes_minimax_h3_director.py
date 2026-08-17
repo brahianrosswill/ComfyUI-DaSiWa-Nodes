@@ -32,10 +32,10 @@ class MiniMaxH3Director:
                 "width": ("INT", {"default": 1344, "min": 16, "max": 8192, "step": 16}),
                 "height": ("INT", {"default": 768, "min": 16, "max": 8192, "step": 16}),
                 "duration": ("INT", {"default": 5, "min": 1, "max": 1000}),
-                "frame_rate": ("FLOAT", {"default": 24.0, "min": 0.1, "max": 240.0, "step": 0.01}),
                 "ref_image_size": (["match", "max"], {"default": "match"}),
                 "timeline_data": ("STRING", {"default": "{\"version\":1,\"items\":[],\"prompt_blocks\":[]}", "multiline": False, "hidden": True}),
                 "builder_state": ("STRING", {"default": "", "multiline": False, "hidden": True}),
+                "frame_rate": ("FLOAT", {"default": 24.0, "min": 0.1, "max": 240.0, "step": 0.01}),
             },
             "optional": {
                 "fl2va_model": ("MODEL", {"lazy": True}),
@@ -70,7 +70,13 @@ class MiniMaxH3Director:
                 raise ValueError("builder_state must be JSON text")
         if mode not in BASE_MODES | {"REF2VA"}:
             raise ValueError(f"unsupported MiniMax Director mode: {mode}")
-        frame_rate = float(frame_rate)
+        # A non-numeric frame_rate (e.g. a stale 9th widgets_value shifted in by an
+        # older save, or an empty string) falls back to the default instead of crashing
+        # the queue; genuinely out-of-range numbers still raise.
+        try:
+            frame_rate = float(frame_rate)
+        except (TypeError, ValueError):
+            frame_rate = 24.0
         if not 0.1 <= frame_rate <= 240.0:
             raise ValueError("MiniMax Director frame_rate must be between 0.1 and 240")
         external_canvas = external_width_overwrite is not None or external_height_overwrite is not None

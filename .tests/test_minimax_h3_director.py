@@ -372,12 +372,16 @@ def test_director_exposes_frame_rate_output_and_validates_range():
             node.build_guide("FL2VA", "", 1344, 768, 5, "match", "{}", frame_rate=out_of_range)
 
 
-def test_director_input_types_declare_frame_rate_directly_under_duration():
+def test_director_input_types_keep_legacy_widget_order_and_put_frame_rate_last():
     required = director.MiniMaxH3Director.INPUT_TYPES()["required"]
     assert required["frame_rate"] == ("FLOAT", {"default": 24.0, "min": 0.1, "max": 240.0, "step": 0.01})
     keys = list(required)
-    # The widget must render directly beneath duration in the node UI.
-    assert keys.index("frame_rate") == keys.index("duration") + 1
+    # The eight widgets that predate frame_rate must keep their original
+    # positional order so that older saved widgets_values arrays still map to
+    # the right slots; frame_rate is appended last so it never shifts them.
+    assert keys[:8] == ["mode", "prompt", "width", "height", "duration",
+                       "ref_image_size", "timeline_data", "builder_state"]
+    assert keys.index("frame_rate") == len(keys) - 1
 
 
 def test_director_keeps_only_external_prompt_overwrite_as_its_prompt_input():
