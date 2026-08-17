@@ -4,6 +4,7 @@ import os
 import sys
 from pathlib import Path
 
+import pytest
 import torch
 
 
@@ -106,3 +107,52 @@ def test_unload_all_comfy_models_calls_unload_and_soft_empty_cache(monkeypatch):
 
     assert batch_output.unload_all_comfy_models() is True
     assert calls == ["unload_all_models", "soft_empty_cache"]
+
+
+def test_force_mmap_allocates_disk_backed_even_when_ram_is_available(tmp_path, monkeypatch):
+    monkeypatch.setattr(batch_output, "can_allocate_in_ram", lambda _: True)
+
+    output, storage_path = batch_output.allocate_cpu_output((1, 2, 2, 1), torch.float32, str(tmp_path), force_mmap=True)
+
+    assert storage_path is not None
+    assert os.path.exists(storage_path)
+    assert output.device.type == "cpu"
+    del output
+    gc.collect()
+    assert not os.path.exists(storage_path)
+
+
+def test_force_mmap_without_ram_shortage_still_checks_disk_space(tmp_path, monkeypatch):
+    monkeypatch.setattr(batch_output, "can_allocate_in_ram", lambda _: True)
+
+    with pytest.raises(RuntimeError, match="Not enough free disk space"):
+        batch_output.allocate_cpu_output(
+            (1, 2, 2, 1), torch.float32, str(tmp_path),
+            has_free_disk_space=lambda *_: False, force_mmap=True,
+        )
+
+
+def test_before_mmap_hook_runs_only_when_mmap_path_is_taken(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(batch_output, "can_allocate_in_ram", lambda _: True)
+
+    # RAM fits and mmap not forced -> no mmap, hook must NOT run.
+    _, path = batch_output.allocate_cpu_output(
+        (1, 2, 2, 1), torch.float32, str(tmp_path),
+        before_mmap=lambda: calls.append("ram"))
+    assert path is None
+    assert calls == []
+
+    # Forced -> hook runs exactly once and before the temp file exists.
+    seen = []
+
+    def hook():
+        seen.append(os.listdir(str(tmp_path)))
+
+    output, path2 = batch_output.allocate_cpu_output(
+        (1, 2, 2, 1), torch.float32, str(tmp_path), force_mmap=True, before_mmap=hook)
+    assert path2 is not None
+    assert len(seen) == 1
+    assert os.path.basename(path2) not in seen[0]
+    del output
+    gc.collect()

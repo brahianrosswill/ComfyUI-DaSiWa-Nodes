@@ -102,7 +102,7 @@ def test_large_cpu_output_uses_comfy_temp_mmap_with_stable_frame_indexes(tmp_pat
 def test_mmap_output_fails_cleanly_when_comfy_temp_has_insufficient_space(tmp_path, monkeypatch):
     monkeypatch.setattr(batch_output, "can_allocate_in_ram", lambda _: False)
 
-    with pytest.raises(RuntimeError, match="ComfyUI temporary directory"):
+    with pytest.raises(RuntimeError, match="Not enough free disk space"):
         batch_output.allocate_cpu_output(
             (3, 2, 2, 3), torch.float32, str(tmp_path), has_free_disk_space=lambda *_: False
         )

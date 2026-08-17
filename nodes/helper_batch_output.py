@@ -89,9 +89,11 @@ def allocate_cpu_output(
     dtype: torch.dtype,
     directory: str,
     has_free_disk_space: Optional[Callable[[str, int], bool]] = None,
+    force_mmap: bool = False,
+    before_mmap: Optional[Callable[[], None]] = None,
 ) -> Tuple[torch.Tensor, Optional[str]]:
     required_bytes = tensor_nbytes(shape, dtype)
-    if can_allocate_in_ram(required_bytes):
+    if not force_mmap and can_allocate_in_ram(required_bytes):
         return torch.zeros(shape, dtype=dtype), None
     if required_bytes > MAX_DISK_BACKED_OUTPUT_BYTES:
         raise RuntimeError(
@@ -103,9 +105,14 @@ def allocate_cpu_output(
     has_free_disk_space = has_free_disk_space or _has_free_disk_space
     if not has_free_disk_space(directory, required_bytes):
         raise RuntimeError(
-            f"ComfyUI temporary directory '{directory}' lacks space for the projected "
-            f"{required_bytes / 1024 ** 3:.2f} GiB output plus a 1 GiB reserve."
+            f"Not enough free disk space for a {required_bytes / 1024 ** 3:.2f} GiB "
+            f"disk-backed output ({TEMP_DISK_RESERVE_BYTES / 1024 ** 3:.0f} GiB reserve "
+            f"required in '{directory}'). Free up space, use a larger/other temp "
+            "drive, disable 'Use disk-backed (mmap) output', or reduce the batch "
+            "size / target resolution."
         )
+    if before_mmap is not None:
+        before_mmap()
 
     descriptor, path = tempfile.mkstemp(prefix="dasiwa_output_", suffix=".mmap", dir=directory)
     os.close(descriptor)
