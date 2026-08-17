@@ -64,10 +64,11 @@ MiniMax H3 Cache ──► Patch Comfy Kitchen Attention ──► Guider / Samp
 
 State-of-the-art image and video enhancement using NVIDIA RTX Video SDK. It executes up to three sequential passes (Denoise, Deblur, and Upscale) in a single node, processing frame-by-frame to keep VRAM usage predictable and low.
 
-- **Refine:** Independent Denoise and Deblur passes.
+- **Refine:** Independent Denoise and Deblur passes (both off by default).
 - **Upscale:** AI-powered VSR and High Bitrate upscaling.
 - **Smart Sizing:** Multiple resize modes including Constant Megapixel targets.
 - **Efficiency:** Frame-by-frame processing for minimal VRAM usage.
+- **Memory Control:** Opt-in disk-backed (mmap) output (`use_mmap`, off by default) plus automatic model unloading when VRAM/RAM runs short (`auto_unload_models`, on by default).
 
 ![RTX_UpscalerRefiner.png](assets/RTX_UpscalerRefiner.png)
 
