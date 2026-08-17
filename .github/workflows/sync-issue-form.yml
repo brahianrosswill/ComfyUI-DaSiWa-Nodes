@@ -1,0 +1,43 @@
+name: Sync issue form node list
+
+# Regenerates the node dropdown in the bug-report issue form from
+# NODE_DISPLAY_NAME_MAPPINGS in __init__.py, and auto-commits to main when the
+# node list has changed. Triggered when the node registrations or the form
+# itself change.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "__init__.py"
+      - ".github/ISSUE_TEMPLATE/bug-report.yml"
+      - ".github/scripts/sync_issue_form.py"
+      - ".github/workflows/sync-issue-form.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  sync-node-dropdown:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run sync script
+        id: sync
+        run: |
+          OUT="$(python .github/scripts/sync_issue_form.py)"
+          echo "$OUT"
+          echo "changed=${OUT##*changed=}" >> "$GITHUB_OUTPUT"
+
+      - name: Commit & push synced dropdown
+        if: steps.sync.outputs.changed == '1'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/ISSUE_TEMPLATE/bug-report.yml
+          git commit -m "chore: sync DaSiWa node list in bug-report issue form"
+          git push

@@ -52,28 +52,28 @@ body:
     attributes:
       label: Which DaSiWa node is affected?
       options:
-        - Resolution Scale Calculator
-        - Torch Resize
-        - Node Status Switch
-        - RTX Upscaler & Refiner
-        - Metadata Image Saver
-        - Metadata Image Saver (Full)
-        - Metadata Config
-        - Create Extra Metadata
-        - Advanced LoRA Loader
-        - Patch Comfy Kitchen Attention
-        - Watermark Overlay
-        - Random String Picker
-        - Wildcard & Preset Prompt Builder
-        - LLM Model Selector
-        - LLM Analyze
-        - Enhanced Video Combine
-        - Inpaint Crop Prep
-        - Inpaint Composite
-        - MiniMax H3 Director
-        - MiniMax H3 Director Guide
-        - MiniMax H3 Cache
-        - Other / general
+        - "DaSiWa Resolution Scale Calculator"
+        - "DaSiWa Torch Resize"
+        - "DaSiWa Node Status Switch"
+        - "DaSiWa RTX Upscaler & Refiner"
+        - "DaSiWa Metadata Image Saver"
+        - "DaSiWa Metadata Image Saver (Full)"
+        - "DaSiWa Metadata Config"
+        - "DaSiWa Create Extra Metadata"
+        - "DaSiWa Advanced LoRA Loader"
+        - "Patch Comfy Kitchen Attention"
+        - "DaSiWa Watermark Overlay"
+        - "DaSiWa Random String Picker"
+        - "DaSiWa Wildcard & Preset Prompt Builder"
+        - "DaSiWa LLM Model Selector"
+        - "DaSiWa LLM Analyze"
+        - "DaSiWa Enhanced Video Combine"
+        - "DaSiWa Inpaint Crop Prep"
+        - "DaSiWa Inpaint Composite"
+        - "MiniMax H3 Director"
+        - "MiniMax H3 Director Guide"
+        - "MiniMax H3 Cache"
+        - "Other / general"
     validations:
       required: true
 
