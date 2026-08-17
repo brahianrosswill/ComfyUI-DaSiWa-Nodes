@@ -68,7 +68,7 @@ State-of-the-art image and video enhancement using NVIDIA RTX Video SDK. It exec
 - **Upscale:** AI-powered VSR and High Bitrate upscaling.
 - **Smart Sizing:** Multiple resize modes including Constant Megapixel targets.
 - **Efficiency:** Frame-by-frame processing for minimal VRAM usage.
-- **Memory Control:** Opt-in disk-backed (mmap) output (`use_mmap`, off by default) plus automatic model unloading when VRAM/RAM runs short (`auto_unload_models`, on by default).
+- **Memory Control:** Disk-backed (mmap) fallback (`use_mmap`, on by default) is only taken as the last tier of the VRAM -> RAM -> disk chain, after automatic model unloading when memory runs short (`auto_unload_models`, on by default). `use_mmap` off = never use disk (uses RAM when possible, else a clear error).
 
 ![RTX_UpscalerRefiner.png](assets/RTX_UpscalerRefiner.png)
 
