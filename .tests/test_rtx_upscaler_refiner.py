@@ -86,7 +86,7 @@ def test_projected_output_bytes_reports_full_rgb_batch_size():
 
 
 def test_large_cpu_output_uses_comfy_temp_mmap_with_stable_frame_indexes(tmp_path, monkeypatch):
-    monkeypatch.setattr(batch_output, "can_allocate_in_ram", lambda _: False)
+    monkeypatch.setattr(rtx_upscaler_refiner, "can_allocate_in_ram", lambda _: False)
     monkeypatch.setattr(rtx_upscaler_refiner, "_temporary_output_directory", lambda: str(tmp_path))
 
     output, storage_path = rtx_upscaler_refiner._allocate_output_tensor((3, 2, 2, 3), torch.float32, torch.device("cpu"))
@@ -109,7 +109,7 @@ def test_mmap_output_fails_cleanly_when_comfy_temp_has_insufficient_space(tmp_pa
 
 
 def test_mmap_output_removes_its_temporary_file_when_tensor_is_released(tmp_path, monkeypatch):
-    monkeypatch.setattr(batch_output, "can_allocate_in_ram", lambda _: False)
+    monkeypatch.setattr(rtx_upscaler_refiner, "can_allocate_in_ram", lambda _: False)
     monkeypatch.setattr(rtx_upscaler_refiner, "_temporary_output_directory", lambda: str(tmp_path))
 
     output, storage_path = rtx_upscaler_refiner._allocate_output_tensor((1, 2, 2, 3), torch.float32, torch.device("cpu"))
@@ -119,3 +119,93 @@ def test_mmap_output_removes_its_temporary_file_when_tensor_is_released(tmp_path
     del output
     gc.collect()
     assert not os.path.exists(storage_path)
+
+
+def test_input_schema_has_mmap_and_auto_unload_options():
+    optional = DaSiWa_RTX_UpscalerRefiner.INPUT_TYPES()["optional"]
+
+    assert optional["use_mmap"][0] == "BOOLEAN"
+    assert optional["use_mmap"][1]["default"] is False
+    assert optional["auto_unload_models"][0] == "BOOLEAN"
+    assert optional["auto_unload_models"][1]["default"] is True
+    # Legacy key stays at its position for old workflows.
+    assert "empty_cache" in optional
+
+
+def test_denoise_and_deblur_default_to_off():
+    required = DaSiWa_RTX_UpscalerRefiner.INPUT_TYPES()["required"]
+
+    assert required["denoise"][1]["default"] is False
+    assert required["deblur"][1]["default"] is False
+
+
+def test_use_mmap_forces_disk_backed_output_even_when_ram_fits(tmp_path, monkeypatch):
+    monkeypatch.setattr(batch_output, "can_allocate_in_ram", lambda _: True)
+    monkeypatch.setattr(rtx_upscaler_refiner, "_temporary_output_directory", lambda: str(tmp_path))
+
+    output, storage_path = rtx_upscaler_refiner._allocate_output_tensor(
+        (1, 2, 2, 3), torch.float32, torch.device("cpu"), force_mmap=True)
+
+    assert storage_path is not None
+    assert os.path.dirname(storage_path) == str(tmp_path)
+    del output
+    gc.collect()
+    assert not os.path.exists(storage_path)
+
+
+def _fake_model_management(calls):
+    mm = types.ModuleType("model_management")
+    mm.unload_all_models = lambda: calls.append("unload_all_models")
+    mm.soft_empty_cache = lambda: calls.append("soft_empty_cache")
+    return mm
+
+
+def test_auto_unload_runs_full_unload_when_vram_is_short(tmp_path, monkeypatch):
+    device = torch.device("cuda:0")
+    monkeypatch.setattr(rtx_upscaler_refiner, "_can_fit_in_vram", lambda *_: False)
+    calls = []
+    monkeypatch.setitem(sys.modules, "model_management", _fake_model_management(calls))
+    monkeypatch.setattr(batch_output, "can_allocate_in_ram", lambda _: True)
+    monkeypatch.setattr(rtx_upscaler_refiner, "_temporary_output_directory", lambda: str(tmp_path))
+
+    output, storage_path = rtx_upscaler_refiner._allocate_output_tensor(
+        (1, 2, 2, 3), torch.float32, device, auto_unload_models=True)
+
+    # VRAM stays short even after the unload -> disk-backed CPU output.
+    assert storage_path is not None
+    assert os.path.dirname(storage_path) == str(tmp_path)
+    assert "unload_all_models" in calls
+    del output
+    gc.collect()
+
+
+def test_auto_unload_recheck_can_restore_gpu_output(monkeypatch):
+    device = torch.device("cuda:0")
+    results = iter([False, True])
+    monkeypatch.setattr(rtx_upscaler_refiner, "_can_fit_in_vram", lambda *_: next(results))
+    calls = []
+    monkeypatch.setitem(sys.modules, "model_management", _fake_model_management(calls))
+
+    output, storage_path = rtx_upscaler_refiner._allocate_output_tensor(
+        (1, 2, 2, 3), torch.float32, device, auto_unload_models=True)
+
+    assert storage_path is None
+    assert output.device == device
+    assert calls == ["unload_all_models", "soft_empty_cache"]
+
+
+def test_auto_unload_disabled_falls_back_without_unloading(tmp_path, monkeypatch):
+    device = torch.device("cuda:0")
+    monkeypatch.setattr(rtx_upscaler_refiner, "_can_fit_in_vram", lambda *_: False)
+    calls = []
+    monkeypatch.setitem(sys.modules, "model_management", _fake_model_management(calls))
+    monkeypatch.setattr(batch_output, "can_allocate_in_ram", lambda _: True)
+    monkeypatch.setattr(rtx_upscaler_refiner, "_temporary_output_directory", lambda: str(tmp_path))
+
+    output, storage_path = rtx_upscaler_refiner._allocate_output_tensor(
+        (1, 2, 2, 3), torch.float32, device, auto_unload_models=False)
+
+    assert storage_path is not None
+    assert calls == []
+    del output
+    gc.collect()
