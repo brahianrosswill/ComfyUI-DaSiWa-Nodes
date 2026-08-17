@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: DaSiWa ComfyUI Installer / general support
+    url: https://github.com/darksidewalker/dasiwa-comfyui-installer
+    about: "Problems installing or updating ComfyUI / DaSiWa nodepacks in general (not a specific node bug)."

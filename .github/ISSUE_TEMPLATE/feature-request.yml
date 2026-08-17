@@ -1,0 +1,53 @@
+name: Feature Request
+description: "You want a new node, a new option, or a change to an existing DaSiWa node."
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Before submitting
+
+        1. Check the existing nodes and their options — it may already exist.
+        2. Search open and closed issues to see if it was already requested.
+        3. Consider whether it belongs in the core nodepack or would work better as a personal custom node.
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: Feature Idea
+      description: "What do you want? What problem does it solve? Which DaSiWa node(s) would it touch, or is it a brand-new node?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: usecase
+    attributes:
+      label: Use Case
+      description: "A concrete example: which workflow, which inputs, what should the output look like?"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: extras
+    attributes:
+      label: Useful extras (optional)
+      options:
+        - label: I attached a mockup / screenshot of how it should look in the GUI.
+        - label: I attached an example workflow that uses it.
+        - label: I'm willing to help implement / test it.
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Your Environment
+      description: "OS, GPU, ComfyUI version, DaSiWa nodepack version — helps us decide what's feasible."
+    validations:
+      required: false
+
+  - type: textarea
+    id: other
+    attributes:
+      label: Other
+      description: "Anything else that might help."
+    validations:
+      required: false

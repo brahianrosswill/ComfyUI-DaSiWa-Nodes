@@ -1,0 +1,143 @@
+name: Bug Report
+description: "Something in a DaSiWa node is broken or misbehaving."
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Before submitting
+
+        1. You are running the **latest ComfyUI** and the **latest DaSiWa nodepack** (`main` branch).
+        2. You can reproduce the issue reliably.
+        3. You have the ComfyUI server logs ready — **especially the startup log** and the lines tagged `[DaSiWa ...]`.
+
+        A bug report without version numbers and logs will likely be closed.
+
+  - type: input
+    id: nodepack-version
+    attributes:
+      label: DaSiWa Nodepack Version
+      description: "Your version (see `pyproject.toml` in your cloned nodepack, or git describe). Latest is 0.4.17."
+      placeholder: "e.g. 0.4.17"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: nodepack-updated
+    attributes:
+      label: Nodepack is up to date
+      options:
+        - label: I ran `git pull` in my ComfyUI-DaSiWa-Nodes folder and restarted ComfyUI before reporting.
+          required: true
+
+  - type: input
+    id: comfyui-version
+    attributes:
+      label: ComfyUI Version
+      description: "The ComfyUI build/version you are running (e.g. from the ComfyUI manager page, `git log -1` in the ComfyUI folder, or the version shown in the GUI)."
+      placeholder: "e.g. v0.3.61"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: comfyui-updated
+    attributes:
+      label: ComfyUI is up to date
+      options:
+        - label: I updated ComfyUI (git pull / manager update) and restarted it before reporting.
+          required: true
+
+  - type: dropdown
+    id: node
+    attributes:
+      label: Which DaSiWa node is affected?
+      options:
+        - Resolution Scale Calculator
+        - Torch Resize
+        - Node Status Switch
+        - RTX Upscaler & Refiner
+        - Metadata Image Saver
+        - Metadata Image Saver (Full)
+        - Metadata Config
+        - Create Extra Metadata
+        - Advanced LoRA Loader
+        - Patch Comfy Kitchen Attention
+        - Watermark Overlay
+        - Random String Picker
+        - Wildcard & Preset Prompt Builder
+        - LLM Model Selector
+        - LLM Analyze
+        - Enhanced Video Combine
+        - Inpaint Crop Prep
+        - Inpaint Composite
+        - MiniMax H3 Director
+        - MiniMax H3 Director Guide
+        - MiniMax H3 Cache
+        - System Monitor
+        - Other / general
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: "What did you expect to happen?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: "What actually happened? Describe the error message, wrong output, or broken state as precisely as you can."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: |
+        Numbered steps so we can repeat it. If possible, attach a minimal workflow JSON (or PNG with workflow data) that reproduces the bug — drag & drop it into this issue.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: DaSiWa / ComfyUI Logs
+      description: |
+        Paste the relevant server logs:
+        - the **startup log** (everything before "To see the GUI go to:") — it shows how many DaSiWa nodes loaded and any import errors,
+        - all lines containing `[DaSiWa` for the affected node,
+        - the full traceback if it crashes.
+
+        Redact anything private (paths, API keys).
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Screenshot / Media
+      description: "Drag & drop a screenshot of the error or the wrong node output directly into the issue body (GitHub supports image drag & drop). Optionally link it here."
+    validations:
+      required: false
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: "OS, GPU (VRAM), CUDA / driver version, Python version, any relevant ComfyUI launch args (e.g. --disable-all-custom-nodes)."
+    validations:
+      required: false
+
+  - type: textarea
+    id: other
+    attributes:
+      label: Other
+      description: "Anything else that might help."
+    validations:
+      required: false
