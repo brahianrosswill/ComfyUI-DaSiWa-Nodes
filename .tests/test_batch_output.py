@@ -76,3 +76,33 @@ def test_reserve_is_capped_at_eight_gib_on_large_memory_systems(monkeypatch):
     monkeypatch.setattr(batch_output, "total_ram_bytes", lambda: 128 * 1024 ** 3)
 
     assert batch_output.ram_safety_reserve_bytes() == 8 * 1024 ** 3
+
+
+def test_unload_all_comfy_models_without_model_management_returns_false(monkeypatch):
+    import builtins
+    import sys
+    monkeypatch.delitem(sys.modules, "model_management", raising=False)
+
+    real_import = builtins.__import__
+
+    def guard(name, *args, **kwargs):
+        if name == "model_management":
+            raise ImportError("no model_management in plain pytest")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", guard)
+
+    assert batch_output.unload_all_comfy_models() is False
+
+
+def test_unload_all_comfy_models_calls_unload_and_soft_empty_cache(monkeypatch):
+    import sys
+    import types
+    calls = []
+    mm = types.ModuleType("model_management")
+    mm.unload_all_models = lambda: calls.append("unload_all_models")
+    mm.soft_empty_cache = lambda: calls.append("soft_empty_cache")
+    monkeypatch.setitem(sys.modules, "model_management", mm)
+
+    assert batch_output.unload_all_comfy_models() is True
+    assert calls == ["unload_all_models", "soft_empty_cache"]

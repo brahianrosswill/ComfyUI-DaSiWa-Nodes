@@ -51,6 +51,26 @@ def _remove_temporary_output(path: str) -> None:
         pass
 
 
+def unload_all_comfy_models() -> bool:
+    """Ask ComfyUI to unload all managed models and empty the allocator.
+
+    Returns True when the unload path was executed, False when
+    model_management is unavailable (plain pytest, ComfyUI rebuild).
+    """
+    try:
+        import model_management
+    except Exception:
+        return False
+    try:
+        model_management.unload_all_models()
+        model_management.soft_empty_cache()
+        return True
+    except Exception:
+        # A failed unload must never abort the node run; the caller's
+        # re-check will simply decide whether to fall back to disk.
+        return False
+
+
 def force_gc_and_cleanup(directory: Optional[str] = None) -> None:
     """Force GC immediately to release mmap files."""
     gc.collect()
