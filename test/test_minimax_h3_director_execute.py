@@ -1,5 +1,5 @@
 """Contract tests for Director-owned Image Inpaint execution."""
-from nodes.helper_minimax_h3_director_execute import (
+from nodes.helper_minimax_h3_director_execute_v2 import (
     DEFAULT_POSTPROCESS_RECIPE,
     normalize_postprocess_recipe,
 )

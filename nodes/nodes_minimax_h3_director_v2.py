@@ -1,18 +1,29 @@
-"""MiniMax H3 Director guide node."""
+"""MiniMax H3 Director 2.0: all-mode Director-owned execution (standalone).
+
+This is the v2 Director node. It is fully independent of the v1 Director
+(native GitHub state) and of v1 helpers: every Director dependency it needs is
+its own _v2 copy. The v1 node and these files must never import from each
+other so the two can coexist in ComfyUI without affecting one another.
+"""
 import json
 
 from .helper_logging import log_dasiwa
-from .helper_minimax_h3_director import (
+from .helper_minimax_h3_director_v2 import (
     align_frame_count, assemble_prompt, audio_duration, load_audio,
     load_embedded_video_audio, load_image, load_video, normalize_guide,
     scale_input_media, validate_reference_limits,
 )
-from .helper_minimax_h3_prompt_builder import (
+from .helper_minimax_h3_prompt_builder_v2 import (
     build_prompt, default_builder_state, migrate_legacy_prompt, normalize_ref_schema,
     validate_builder_state,
 )
+from .helper_minimax_h3_director_execute_v2 import (
+    normalize_postprocess_recipe, execute_image_inpaint, execute_h3,
+)
+from .helper_media_output_v2 import publish_media_output
 
 BASE_MODES = {"T2VA", "I2VA", "FL2VA", "L2VA"}
+IMAGE_INPAINT_MODE = "Image Inpaint"
 
 
 def _describe_model(model) -> str:
@@ -22,12 +33,14 @@ def _describe_model(model) -> str:
     return f"{model_type.__module__}.{model_type.__name__}"
 
 
-class MiniMaxH3Director:
+class MiniMaxH3DirectorV2:
+    """Director 2.0: owns H3 conditioning, sampling and output for every mode."""
+
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "mode": (["T2VA", "I2VA", "FL2VA", "L2VA", "REF2VA"], {"default": "FL2VA"}),
+                "mode": (["T2VA", "I2VA", "FL2VA", "L2VA", "REF2VA", IMAGE_INPAINT_MODE], {"default": "FL2VA"}),
                 "prompt": ("STRING", {"default": "", "multiline": True}),
                 "width": ("INT", {"default": 1344, "min": 16, "max": 8192, "step": 16}),
                 "height": ("INT", {"default": 768, "min": 16, "max": 8192, "step": 16}),
@@ -43,24 +56,47 @@ class MiniMaxH3Director:
                 "external_width_overwrite": ("INT", {"min": 1, "max": 8192, "step": 1, "forceInput": True}),
                 "external_height_overwrite": ("INT", {"min": 1, "max": 8192, "step": 1, "forceInput": True}),
                 "external_prompt_overwrite": ("STRING", {"default": "", "multiline": True, "forceInput": True}),
+                "internal_execute": ("BOOLEAN", {"default": False}),
+                "clip": ("CLIP",),
+                "vae": ("VAE",),
+                "audio_vae": ("VAE",),
+                "fl2va_clip": ("CLIP", {"forceInput": True}),
+                "ref2va_clip": ("CLIP", {"forceInput": True}),
+                "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff, "forceInput": True}),
             },
+            "hidden": {"prompt_context": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
         }
 
-    RETURN_TYPES = ("MINIMAX_H3_DIRECTOR_GUIDE", "INT", "STRING", "INT", "INT", "MODEL", "BOOLEAN", "BOOLEAN", "FLOAT")
-    RETURN_NAMES = ("guide", "duration", "positive_prompt", "width", "height", "model", "fl2va_requested", "ref2va_requested", "frame_rate")
-    FUNCTION = "build_guide"
+    RETURN_TYPES = ("MODEL",)
+    RETURN_NAMES = ("selected_model",)
+    FUNCTION = "execute"
     CATEGORY = "DaSiWa/MiniMax H3"
+    OUTPUT_NODE = True
+
+    @staticmethod
+    def select_execution_model(mode, fl2va_model, ref2va_model):
+        return ref2va_model if mode == "REF2VA" else fl2va_model
+
+    @staticmethod
+    def select_execution_clip(mode, clip, fl2va_clip=None, ref2va_clip=None):
+        return (ref2va_clip if mode == "REF2VA" else fl2va_clip) or clip
 
     def check_lazy_status(self, mode, prompt, width, height, duration, ref_image_size, timeline_data, builder_state,
                           fl2va_model=None, ref2va_model=None, external_width_overwrite=None,
-                          external_height_overwrite=None, external_prompt_overwrite=None, frame_rate=24.0):
+                          external_height_overwrite=None, external_prompt_overwrite=None, frame_rate=24.0,
+                          internal_execute=False, clip=None, vae=None, seed=0, prompt_context=None, extra_pnginfo=None):
+        if internal_execute:
+            missing = [name for name, value in (("clip", clip), ("vae", vae)) if value is None]
+            if missing:
+                return missing
         selected_name = "ref2va_model" if mode == "REF2VA" else "fl2va_model"
         selected_model = ref2va_model if mode == "REF2VA" else fl2va_model
         return [selected_name] if selected_model is None else []
 
     def build_guide(self, mode, prompt, width, height, duration, ref_image_size, timeline_data, builder_state="",
                     fl2va_model=None, ref2va_model=None, external_width_overwrite=None,
-                    external_height_overwrite=None, external_prompt_overwrite=None, frame_rate=24.0):
+                    external_height_overwrite=None, external_prompt_overwrite=None, frame_rate=24.0,
+                    internal_execute=False, clip=None, vae=None, seed=0, prompt_context=None, extra_pnginfo=None):
         # Preserve direct Python callers that used the pre-builder positional model argument.
         if builder_state is not None and not isinstance(builder_state, str):
             if fl2va_model is None:
@@ -68,7 +104,7 @@ class MiniMaxH3Director:
                 builder_state = ""
             else:
                 raise ValueError("builder_state must be JSON text")
-        if mode not in BASE_MODES | {"REF2VA"}:
+        if mode not in BASE_MODES | {"REF2VA", IMAGE_INPAINT_MODE}:
             raise ValueError(f"unsupported MiniMax Director mode: {mode}")
         # A non-numeric frame_rate (e.g. a stale 9th widgets_value shifted in by an
         # older save, or an empty string) falls back to the default instead of crashing
@@ -111,13 +147,25 @@ class MiniMaxH3Director:
         items = sorted(enumerate(state.get("items", [])), key=lambda pair: (int(pair[1].get("order", pair[0])), pair[0]))
         items = [pair for pair in items if pair[1].get("enabled", True)]
         first_frame = last_frame = None
-        ref_images, ref_videos, ref_video_audios, ref_audios = {}, {}, {}, {}
-        images, videos, audios = [], [], []
         try:
             import folder_paths
             input_directory = folder_paths.get_input_directory()
         except (ImportError, AttributeError):
             input_directory = None
+        if mode == IMAGE_INPAINT_MODE:
+            image_items = [pair for pair in items if pair[1].get("type") == "image"]
+            incompatible_items = [pair[1].get("type") for pair in items if pair[1].get("type") != "image"]
+            if incompatible_items:
+                raise ValueError("Image Inpaint accepts image references only; video and audio references are not supported")
+            if len(image_items) != 1:
+                raise ValueError("Image Inpaint requires exactly one enabled image reference")
+            value = image_items[0][1].get("value", image_items[0][1].get("tensor"))
+            if isinstance(value, str) and input_directory:
+                value = load_image(value, input_directory)
+            first_frame = scale_input_media(value, input_scaling, width, height)
+            length = 1
+        ref_images, ref_videos, ref_video_audios, ref_audios = {}, {}, {}, {}
+        images, videos, audios = [], [], []
 
         if mode in BASE_MODES:
             image_items = sorted((pair for pair in items if pair[1].get("type") == "image"), key=lambda pair: (pair[1].get("slot", pair[0]), pair[0]))
@@ -138,7 +186,7 @@ class MiniMaxH3Director:
                     last_frame = value
                 else:
                     first_frame = value
-        else:
+        elif mode != IMAGE_INPAINT_MODE:
             type_order = {"image": 0, "video": 1, "audio": 2}
             for _, item in sorted(items, key=lambda pair: (type_order.get(pair[1].get("type"), 3), pair[1].get("slot", pair[0]), pair[0])):
                 kind, value = item.get("type"), item.get("value", item.get("tensor"))
@@ -194,20 +242,89 @@ class MiniMaxH3Director:
                     mode != "REF2VA"):
                 resolved = assemble_prompt(prompt, blocks)
         for issue in validate_builder_state(merged):
-            log_dasiwa("MiniMax H3 Director", f"[{issue['level'].upper()}] {issue['msg']}")
+            log_dasiwa("MiniMax H3 Director 2.0", f"[{issue['level'].upper()}] {issue['msg']}")
         guide = {
             "version": 2, "mode": mode, "prompt": prompt, "prompt_blocks": blocks, "resolved_prompt": resolved,
-            "width": width, "height": height, "length": length, "ref_image_size": ref_image_size, "input_scaling": input_scaling,
+            "width": width, "height": height, "length": length, "output_frame_count": length, "ref_image_size": ref_image_size, "input_scaling": input_scaling,
             "first_frame": first_frame, "last_frame": last_frame, "ref_images": ref_images, "ref_videos": ref_videos,
             "ref_video_audios": ref_video_audios, "ref_audios": ref_audios, "builder_state": merged,
+            "postprocess_recipe": normalize_postprocess_recipe(state.get("postprocess_recipe")),
+            "internal_execution": state.get("internal_execution") or {},
             "timeline": [{key: item.get(key) for key in ("id", "type", "start", "duration", "order", "trim_start", "trim_end") if key in item} for _, item in items],
             "prompt_payload": {"mode": mode, "full_prompt": resolved, "is_ref_mode": mode == "REF2VA", "subject_definitions": merged["ref"]["subject_defs"], "summary": merged["ref"]["summary_text"], "retention_analysis": merged["ref"]["retention"], "detailed_description": {"style_line": merged["ref"]["style_line"], "detail": merged["ref"]["detail"]}, "overall_soundscape": merged["ref"]["soundscape"] if mode == "REF2VA" else merged["soundscape"], "non_diegetic_music": merged["ref"]["music"] if mode == "REF2VA" else merged["music"], "imd": merged.get("imd", ""), "p2_shot": merged.get("p2_shot", ""), "last_shot": merged.get("last_shot", "")},
         }
         normalize_guide(guide)
         selected_model = ref2va_model if mode == "REF2VA" else fl2va_model
-        log_dasiwa("MiniMax H3 Director", f"mode={mode}; requested_model={'ref2va_model' if mode == 'REF2VA' else 'fl2va_model'}; passed_model={_describe_model(selected_model)}; canvas={width}x{height}; frames={length}; fps={frame_rate}; refs=images:{len(ref_images)},videos:{len(ref_videos)},video_audio:{len(ref_video_audios)},audio:{len(ref_audios)}; timeline_items={len(items)}")
-        return guide, length, resolved, int(width), int(height), selected_model, mode in BASE_MODES, mode == "REF2VA", frame_rate
+        director_ui = None
+        if internal_execute:
+            if mode != IMAGE_INPAINT_MODE:
+                raise ValueError("Director internal execution currently supports Image Inpaint only")
+            if clip is None or vae is None or selected_model is None:
+                raise ValueError("Director internal execution requires model, clip, and vae")
+            execution = dict(guide["internal_execution"])
+            execution["postprocess_recipe"] = guide["postprocess_recipe"]
+            execution["save"] = {**(execution.get("save") or {}), "output_kind": "image"}
+            images = execute_image_inpaint(guide, selected_model, clip, vae, seed, execution)
+            save = {**(execution.get("save") or {}), "output_kind": "image" if mode == IMAGE_INPAINT_MODE else "video"}
+            metadata = {
+                "save_workflow": bool(save.get("save_workflow", True)),
+                "model_hash": "",
+                "text_positive": resolved,
+                "text_negative": "",
+                "text_seed": int(seed),
+                "text_model": _describe_model(selected_model),
+                "text_cfg": 0.0,
+                "text_sampler": execution.get("sampler", "res_multistep"),
+                "text_scheduler": execution.get("scheduler", "simple"),
+                "text_steps": int(execution.get("steps", 25)),
+            }
+            save_result = publish_media_output(
+                images, frame_rate, save, metadata, prompt=prompt_context, extra_pnginfo=extra_pnginfo,
+            )
+            director_ui = save_result.get("ui") if isinstance(save_result, dict) else None
+        log_dasiwa("MiniMax H3 Director 2.0", f"mode={mode}; requested_model={'ref2va_model' if mode == 'REF2VA' else 'fl2va_model'}; passed_model={_describe_model(selected_model)}; canvas={width}x{height}; frames={length}; fps={frame_rate}; refs=images:{len(ref_images)},videos:{len(ref_videos)},video_audio:{len(ref_video_audios)},audio:{len(ref_audios)}; timeline_items={len(items)}")
+        result = (guide, length, resolved, int(width), int(height), selected_model, mode in BASE_MODES, mode == "REF2VA", frame_rate)
+        return {"ui": director_ui, "result": result} if director_ui is not None else result
+
+    def execute(self, mode, prompt, width, height, duration, ref_image_size, timeline_data, builder_state="",
+                fl2va_model=None, ref2va_model=None, external_width_overwrite=None,
+                external_height_overwrite=None, external_prompt_overwrite=None, frame_rate=24.0,
+                internal_execute=False, clip=None, vae=None, seed=0, prompt_context=None, extra_pnginfo=None,
+                audio_vae=None, fl2va_clip=None, ref2va_clip=None):
+        model = self.select_execution_model(mode, fl2va_model, ref2va_model)
+        execution_clip = self.select_execution_clip(mode, clip, fl2va_clip, ref2va_clip)
+        if model is None:
+            wanted = "ref2va_model" if mode == "REF2VA" else "fl2va_model"
+            raise ValueError(f"MiniMax H3 Director 2.0 requires {wanted}")
+        if execution_clip is None or vae is None:
+            raise ValueError("MiniMax H3 Director 2.0 requires clip (or the selected mode's LoRA-patched clip) and vae")
+        guide_result = self.build_guide(
+            mode, prompt, width, height, duration, ref_image_size, timeline_data, builder_state,
+            fl2va_model, ref2va_model, external_width_overwrite, external_height_overwrite,
+            external_prompt_overwrite, frame_rate, False, clip, vae, seed, prompt_context, extra_pnginfo,
+        )
+        guide = guide_result[0]
+        execution = dict(guide.get("internal_execution") or {})
+        execution["postprocess_recipe"] = guide.get("postprocess_recipe")
+        save = dict(execution.get("save") or {})
+        save["output_kind"] = "image" if mode == IMAGE_INPAINT_MODE else "video"
+        execution["save"] = save
+        images, audio = execute_h3(guide, model, execution_clip, vae, audio_vae, seed, execution)
+        metadata = {
+            "save_workflow": bool(save.get("save_workflow", True)),
+            "model_hash": "",
+            "text_positive": guide["resolved_prompt"],
+            "text_negative": "",
+            "text_seed": int(seed),
+            "text_model": _describe_model(model),
+            "text_cfg": 0.0,
+            "text_sampler": execution.get("sampler", "res_multistep"),
+            "text_scheduler": execution.get("scheduler", "simple"),
+            "text_steps": int(execution.get("steps", 25)),
+        }
+        published = publish_media_output(images, frame_rate, save, metadata, audio=audio, prompt=prompt_context, extra_pnginfo=extra_pnginfo)
+        return {"ui": published.get("ui") if isinstance(published, dict) else {}, "result": (model,)}
 
 
-NODE_CLASS_MAPPINGS = {"MiniMaxH3Director": MiniMaxH3Director}
-NODE_DISPLAY_NAME_MAPPINGS = {"MiniMaxH3Director": "MiniMax H3 Director"}
+NODE_CLASS_MAPPINGS = {"MiniMaxH3DirectorV2": MiniMaxH3DirectorV2}
+NODE_DISPLAY_NAME_MAPPINGS = {"MiniMaxH3DirectorV2": "MiniMax H3 Director 2.0"}

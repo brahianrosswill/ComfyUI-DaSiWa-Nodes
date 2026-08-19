@@ -2,7 +2,7 @@
 
 
 def test_image_publication_uses_metadata_saver_and_passes_automatic_metadata():
-    from nodes.helper_media_output import publish_media_output
+    from nodes.helper_media_output_v2 import publish_media_output
 
     calls = []
 
@@ -33,7 +33,7 @@ def test_image_publication_uses_metadata_saver_and_passes_automatic_metadata():
 
 
 def test_video_publication_reuses_enhanced_video_combine_with_automatic_metadata():
-    from nodes.helper_media_output import publish_media_output
+    from nodes.helper_media_output_v2 import publish_media_output
 
     calls = []
 

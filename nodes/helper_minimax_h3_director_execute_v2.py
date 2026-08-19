@@ -120,3 +120,42 @@ def execute_image_inpaint(guide, model, clip, vae, seed, settings=None):
     decoded_images = _first(VAEDecode().decode(vae, sampled))
     images = decoded_images if (settings.get("save") or {}).get("output_kind") == "video" else decoded_images[:1]
     return _postprocess(images, normalize_postprocess_recipe(settings.get("postprocess_recipe")))
+
+
+def execute_h3(guide, model, clip, vae, audio_vae, seed, settings=None):
+    """Execute every Director mode with native H3 conditioning and sampling."""
+    settings = settings or {}
+    from comfy_extras.nodes_custom_sampler import BasicGuider, BasicScheduler, KSamplerSelect, RandomNoise, SamplerCustomAdvanced
+    from comfy_extras.nodes_minimax_h3 import MiniMaxH3ImageToVideo, MiniMaxH3ReferenceToVideo
+    from nodes import VAEDecode
+
+    model, clip = _apply_model_patches(model, clip, settings)
+    length = 5 if guide.get("mode") == "Image Inpaint" else int(guide["length"])
+    if guide.get("mode") == "REF2VA":
+        if audio_vae is None:
+            raise ValueError("REF2VA internal execution requires audio_vae")
+        positive, latent = MiniMaxH3ReferenceToVideo.execute(
+            clip, vae, audio_vae, guide["resolved_prompt"], int(guide["width"]), int(guide["height"]), length,
+            guide.get("ref_image_size", "match"), guide.get("ref_images"), guide.get("ref_videos"),
+            guide.get("ref_video_audios"), guide.get("ref_audios"),
+        )
+    else:
+        positive, latent = MiniMaxH3ImageToVideo.execute(
+            clip, vae, guide["resolved_prompt"], int(guide["width"]), int(guide["height"]), length,
+            guide.get("first_frame"), guide.get("last_frame"),
+        )
+    guider = _first(BasicGuider.execute(model, positive))
+    sampler = _first(KSamplerSelect.execute(settings.get("sampler", "res_multistep")))
+    sigmas = _first(BasicScheduler.execute(model, settings.get("scheduler", "simple"), int(settings.get("steps", 25)), 1.0))
+    sampled = _first(SamplerCustomAdvanced.execute(_first(RandomNoise.execute(int(seed))), guider, sampler, sigmas, latent))
+    images = _first(VAEDecode().decode(vae, sampled))
+    if guide.get("mode") == "Image Inpaint":
+        images = images[:1]
+    audio = None
+    if audio_vae is not None:
+        av_samples = sampled.get("samples") if isinstance(sampled, dict) else None
+        if getattr(av_samples, "is_nested", False):
+            audio_latent = av_samples.unbind()[-1]
+            waveform = audio_vae.decode(audio_latent).movedim(-1, 1).to(audio_latent.device)
+            audio = {"waveform": waveform, "sample_rate": getattr(audio_vae, "audio_sample_rate", 32000)}
+    return _postprocess(images, normalize_postprocess_recipe(settings.get("postprocess_recipe"))), audio

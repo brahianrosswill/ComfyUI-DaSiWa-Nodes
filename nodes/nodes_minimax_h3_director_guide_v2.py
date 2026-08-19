@@ -1,6 +1,10 @@
-"""Thin Director adapter for ComfyUI's native MiniMax H3 nodes."""
+"""MiniMax H3 Director Guide 2.0: thin adapter for ComfyUI's native MiniMax H3 nodes.
 
-from .helper_minimax_h3_director import normalize_guide
+Standalone v2 fork of the Director Guide. It depends only on the v2 Director
+helper (helper_minimax_h3_director_v2) so it never couples to the v1 Director.
+"""
+
+from .helper_minimax_h3_director_v2 import normalize_guide
 from .helper_logging import log_dasiwa
 
 
@@ -31,8 +35,8 @@ def _native_node(name):
         ) from exc
 
 
-class MiniMaxH3DirectorGuide:
-    """Turn one Director guide socket into the exact native MiniMax H3 call."""
+class MiniMaxH3DirectorGuideV2:
+    """Turn one Director 2.0 guide socket into the exact native MiniMax H3 call."""
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -52,20 +56,21 @@ class MiniMaxH3DirectorGuide:
 
     def apply(self, clip, vae, guide, audio_vae=None):
         state = normalize_guide(guide)
-        if state.mode in {"T2VA", "I2VA", "FL2VA", "L2VA"}:
+        if state.mode in {"T2VA", "I2VA", "FL2VA", "L2VA", "Image Inpaint"}:
             native = _native_node("MiniMaxH3ImageToVideo")
+            native_length = 5 if state.mode == "Image Inpaint" else state.length
             log_dasiwa(
-                "MiniMax H3 Director Guide",
-                f"mode=FL2VA; upstream=MiniMaxH3ImageToVideo; clip={type(clip).__name__}; "
-                f"vae={type(vae).__name__}; audio_vae=not-used; frames={state.length}; "
+                "MiniMax H3 Director Guide 2.0",
+                f"mode={state.mode}; upstream=MiniMaxH3ImageToVideo; clip={type(clip).__name__}; "
+                f"vae={type(vae).__name__}; audio_vae=not-used; frames={native_length}; "
                 f"first_frame={state.first_frame is not None}; last_frame={state.last_frame is not None}",
             )
             positive, latent = native.execute(
-                clip, vae, state.resolved_prompt, state.width, state.height, state.length,
+                clip, vae, state.resolved_prompt, state.width, state.height, native_length,
                 state.first_frame, state.last_frame,
             )
             log_dasiwa(
-                "MiniMax H3 Director Guide",
+                "MiniMax H3 Director Guide 2.0",
                 f"passed forward from MiniMaxH3ImageToVideo: conditioning={_describe_output(positive)}; "
                 f"latent={_describe_output(latent)}",
             )
@@ -75,7 +80,7 @@ class MiniMaxH3DirectorGuide:
             raise ValueError("audio_vae is required for REF2VA")
         native = _native_node("MiniMaxH3ReferenceToVideo")
         log_dasiwa(
-            "MiniMax H3 Director Guide",
+            "MiniMax H3 Director Guide 2.0",
             f"mode=REF2VA; upstream=MiniMaxH3ReferenceToVideo; clip={type(clip).__name__}; "
             f"vae={type(vae).__name__}; audio_vae={type(audio_vae).__name__}; frames={state.length}; "
             f"refs=images:{len(state.ref_images)},videos:{len(state.ref_videos)},"
@@ -87,12 +92,12 @@ class MiniMaxH3DirectorGuide:
             state.ref_video_audios, state.ref_audios,
         )
         log_dasiwa(
-            "MiniMax H3 Director Guide",
+            "MiniMax H3 Director Guide 2.0",
             f"passed forward from MiniMaxH3ReferenceToVideo: conditioning={_describe_output(positive)}; "
             f"latent={_describe_output(latent)}",
         )
         return positive, latent
 
 
-NODE_CLASS_MAPPINGS = {"MiniMaxH3DirectorGuide": MiniMaxH3DirectorGuide}
-NODE_DISPLAY_NAME_MAPPINGS = {"MiniMaxH3DirectorGuide": "MiniMax H3 Director Guide"}
+NODE_CLASS_MAPPINGS = {"MiniMaxH3DirectorGuideV2": MiniMaxH3DirectorGuideV2}
+NODE_DISPLAY_NAME_MAPPINGS = {"MiniMaxH3DirectorGuideV2": "MiniMax H3 Director Guide 2.0"}

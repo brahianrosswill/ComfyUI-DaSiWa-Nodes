@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent.parent
-JS = ROOT / "js" / "minimax_h3_director.js"
+JS = ROOT / "js" / "minimax_h3_director_v2.js"
 
 
 def source():
@@ -25,8 +25,9 @@ def test_director_controls_have_single_owners_and_image_inpaint_can_start_empty(
     assert 'promptSettingsPanel' not in src
     assert 'Save Settings' not in src
     assert 'controlRow.append(modeGroup, saveNodePanel)' in src
-    # The post-process options render as a 5th row of pills inside the mode group.
-    assert 'modeGroup.append(postprocessPanel)' in src
+    # The post-process, resolution and optimization panels render as one shared
+    # info-feed row appended together inside the mode group (current v2 layout).
+    assert 'modeGroup.append(resolutionPanel, postprocessPanel, optimizationPanel)' in src
     assert 'PP_STAGE_FIELDS' in src
     assert 'modelFolder' in src
     assert 'ppLoadModelList' in src

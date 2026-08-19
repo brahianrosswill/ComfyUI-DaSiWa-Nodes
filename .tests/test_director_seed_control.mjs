@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const source = await readFile(new URL("../js/minimax_h3_director.js", import.meta.url), "utf8");
+const source = await readFile(new URL("../js/minimax_h3_director_v2.js", import.meta.url), "utf8");
 assert.match(source, /seed_control/, "seed-control state must persist with the Director workflow");
 assert.match(source, /Random/, "seed control must offer Random mode");
 assert.match(source, /Fixed/, "seed control must offer Fixed mode");
@@ -54,4 +54,5 @@ assert.match(source, /saveHeader\.append\(saveTitle, saveMenu\)/, "Preview & Out
 assert.match(source, /saveMenu\.textContent = "☰"/, "save options must use a burger button instead of a gear");
 assert.match(source, /save_output/, "save options menu must retain Save output setting");
 assert.match(source, /save_workflow/, "save options menu must retain Embed workflow setting");
+assert.match(source, /MiniMaxH3DirectorV2/, "Director frontend must install for the new 2.0 node class");
 assert.match(source, /BigInt/, "seed values must retain the full unsigned 64-bit range");

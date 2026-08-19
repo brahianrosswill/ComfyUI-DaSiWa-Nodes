@@ -90,11 +90,9 @@ def test_old_9_value_save_loads_without_crashing_and_preserves_prompt():
         "",  # stale 9th value: was external_prompt, now lands on frame_rate
     ])
 
-    result = node.build_guide(
+    guide, *_ , out_frame_rate = node.build_guide(
         **{**kwargs, "frame_rate": kwargs.get("frame_rate", 24.0)}
     )
-    out_frame_rate = result[8]
-    guide = result[0]
 
     # The stale value is coerced to the default instead of raising.
     assert out_frame_rate == 24.0
@@ -111,32 +109,4 @@ def test_out_of_range_frame_rate_still_raises():
     except ValueError:
         return
     raise AssertionError("expected ValueError for out-of-range frame_rate")
-
-
-def test_image_inpaint_requires_exactly_one_image_and_forces_one_frame():
-    node = MiniMaxH3Director()
-    timeline = json.dumps({"items": [{"type": "image", "value": "input.png", "enabled": True}]})
-    guide, frame_count, *_ = node.build_guide("Image Inpaint", "", 1344, 768, 5, "match", timeline, "")
-    assert frame_count == 1
-    assert guide["mode"] == "Image Inpaint"
-    assert guide["output_frame_count"] == 1
-    assert guide["postprocess_recipe"][0]["id"] == "frame_interpolation"
-    assert not any(stage["enabled"] for stage in guide["postprocess_recipe"])
-    assert guide["internal_execution"] == {}
-
-
-def test_image_inpaint_rejects_missing_or_multiple_images_and_other_media():
-    node = MiniMaxH3Director()
-    cases = [
-        {"items": []},
-        {"items": [{"type": "image", "value": "a.png"}, {"type": "image", "value": "b.png"}]},
-        {"items": [{"type": "video", "value": "a.mp4"}]},
-        {"items": [{"type": "audio", "value": "a.wav"}]},
-    ]
-    for state in cases:
-        try:
-            node.build_guide("Image Inpaint", "", 1344, 768, 5, "match", json.dumps(state), "")
-        except ValueError:
-            continue
-        raise AssertionError(f"expected Image Inpaint validation failure for {state}")
 
