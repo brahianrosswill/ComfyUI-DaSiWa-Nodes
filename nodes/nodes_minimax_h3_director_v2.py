@@ -65,8 +65,8 @@ class MiniMaxH3DirectorV2:
             "hidden": {"prompt_context": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
         }
 
-    RETURN_TYPES = ("MODEL",)
-    RETURN_NAMES = ("selected_model",)
+    RETURN_TYPES = ("FLOAT", "INT", "IMAGE")
+    RETURN_NAMES = ("frame_rate", "duration", "images")
     FUNCTION = "execute"
     CATEGORY = "DaSiWa/MiniMax H3"
     OUTPUT_NODE = True
@@ -317,7 +317,8 @@ class MiniMaxH3DirectorV2:
             "text_steps": int(execution.get("steps", 25)),
         }
         published = publish_media_output(images, frame_rate, save, metadata, audio=audio, prompt=prompt_context, extra_pnginfo=extra_pnginfo)
-        return {"ui": published.get("ui") if isinstance(published, dict) else {}, "result": (model,)}
+        duration = int(guide["length"]) / frame_rate
+        return {"ui": published.get("ui") if isinstance(published, dict) else {}, "result": (frame_rate, duration, images)}
 
 
 NODE_CLASS_MAPPINGS = {"MiniMaxH3DirectorV2": MiniMaxH3DirectorV2}

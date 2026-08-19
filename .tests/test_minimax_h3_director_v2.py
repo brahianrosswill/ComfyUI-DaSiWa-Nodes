@@ -13,8 +13,8 @@ def test_director_v2_is_a_distinct_internal_execution_node():
     assert schema["optional"]["fl2va_model"][0] == "MODEL"
     assert schema["optional"]["ref2va_model"][0] == "MODEL"
     assert MiniMaxH3DirectorV2.OUTPUT_NODE is True
-    assert MiniMaxH3DirectorV2.RETURN_TYPES == ("MODEL",)
-    assert MiniMaxH3DirectorV2.RETURN_NAMES == ("selected_model",)
+    assert MiniMaxH3DirectorV2.RETURN_TYPES == ("FLOAT", "INT", "IMAGE")
+    assert MiniMaxH3DirectorV2.RETURN_NAMES == ("frame_rate", "duration", "images")
 
 
 def test_director_v2_prefers_the_returned_lora_model():
