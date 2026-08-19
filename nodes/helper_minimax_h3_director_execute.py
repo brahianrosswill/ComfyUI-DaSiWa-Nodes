@@ -5,7 +5,7 @@ DEFAULT_POSTPROCESS_RECIPE = (
     {"id": "frame_interpolation", "enabled": False, "factor": 2, "model": "rife_v4.26.safetensors"},
     {"id": "torch_resize", "enabled": False, "size_mode": "Multiplier", "scale_multiplier": 2, "interpolation": "Lanczos"},
     {"id": "model_upscale", "enabled": False, "model_name": "2x-AnimeSharpV4_RCAN.safetensors"},
-    {"id": "rtx_refiner", "enabled": False, "upscale": "VSR", "upscale_quality": "Ultra"},
+    {"id": "rtx_refiner", "enabled": False, "denoise": False, "denoise_quality": "Ultra", "deblur": False, "deblur_quality": "Ultra", "upscale": "VSR", "upscale_quality": "Ultra", "resize_type": "Scale", "scale": 2.0, "megapixels": 2.0, "width": 1920, "height": 1080, "divisible_by": "8", "ratio_preset": "16:9", "resize_method": "Center Crop (Fill)", "device_id": 0, "empty_cache": False, "use_mmap": True, "auto_unload_models": True},
     {"id": "watermark", "enabled": False, "watermark_path": "", "position": "bottom-right"},
 )
 
@@ -72,8 +72,16 @@ def _postprocess(images, recipe):
         elif stage_id == "rtx_refiner":
             from .nodes_rtx_upscaler_refiner import DaSiWa_RTX_UpscalerRefiner
             images = _first(DaSiWa_RTX_UpscalerRefiner().execute(
-                images, False, "Ultra", False, "Ultra", stage["upscale"], stage["upscale_quality"],
-                "Scale by", 2.0, 1.0, 1024, 1024, 16, "Custom", "Lanczos", 0,
+                images,
+                stage["denoise"], stage["denoise_quality"],
+                stage["deblur"], stage["deblur_quality"],
+                stage["upscale"], stage["upscale_quality"],
+                stage["resize_type"], stage["scale"], stage["megapixels"],
+                stage["width"], stage["height"], stage["divisible_by"],
+                stage["ratio_preset"], stage["resize_method"], stage["device_id"],
+                empty_cache=stage["empty_cache"],
+                use_mmap=stage["use_mmap"],
+                auto_unload_models=stage["auto_unload_models"],
             ))
         elif stage_id == "watermark":
             from .nodes_watermark import DaSiWa_Watermark

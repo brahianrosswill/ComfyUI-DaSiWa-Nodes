@@ -33,6 +33,155 @@ const AUDIO_EXTENSIONS = new Set(["aac", "aif", "aiff", "alac", "amr", "ape", "c
 const AUTOMATIC_SAVE_METADATA_KEYS = new Set(["model_hash", "text_positive", "text_negative", "text_steps", "text_cfg", "text_sampler", "text_scheduler", "text_seed", "text_model"]);
 const IMAGE_SAVE_OPTION_KEYS = new Set(["filename_prefix", "file_format", "compression"]);
 const VIDEO_SAVE_OPTION_KEYS = new Set(["filename_prefix", "codec", "container", "bit_depth", "quality", "pingpong", "crop_to_audio", "audio_codec", "audio_bitrate", "save_first_frame", "save_last_frame"]);
+// Pill / modal display names for each post-process stage (cleaner than the raw id).
+const PP_STAGE_LABELS = {
+  frame_interpolation: "Frame Interpolation",
+  torch_resize: "Torch Resize",
+  model_upscale: "Model Upscaler",
+  rtx_refiner: "RTX Upscaler & Refiner",
+  watermark: "Watermark",
+};
+const ppStageLabel = (id) => PP_STAGE_LABELS[id] || String(id || "").replaceAll("_", " ");
+// Full option spec for each post-process stage, mirroring the real standalone nodes.
+// The burger modal always renders every field below (filling missing keys with the
+// default), so a freshly-saved stage still exposes the complete option set.
+const PP_QUALITY_OPTIONS = ["Low", "Medium", "High", "Ultra"];
+const PP_STAGE_FIELDS = {
+  frame_interpolation: [
+    { key: "factor", type: "number", min: 1, max: 4, step: 0.5, default: 2 },
+    { key: "model", type: "modelFolder", folder: "frame_interpolation" },
+  ],
+  torch_resize: [
+    { key: "size_mode", type: "combo", options: ["Multiplier", "Target resolution"], default: "Multiplier" },
+    { key: "scale_multiplier", type: "number", min: 0.25, max: 8, step: 0.25, default: 2 },
+    { key: "interpolation", type: "combo", options: ["Nearest", "Bilinear", "Bicubic", "Area", "Lanczos"], default: "Lanczos" },
+  ],
+  model_upscale: [
+    { key: "model_name", type: "modelFolder", folder: "upscale_models" },
+  ],
+  rtx_refiner: [
+    { key: "denoise", type: "boolean", default: false },
+    { key: "denoise_quality", type: "combo", options: PP_QUALITY_OPTIONS, default: "Ultra" },
+    { key: "deblur", type: "boolean", default: false },
+    { key: "deblur_quality", type: "combo", options: PP_QUALITY_OPTIONS, default: "Ultra" },
+    { key: "upscale", type: "combo", options: ["Off", "VSR", "High Bitrate"], default: "VSR" },
+    { key: "upscale_quality", type: "combo", options: PP_QUALITY_OPTIONS, default: "Ultra" },
+    { key: "resize_type", type: "combo", options: ["Keep Ratio", "Manual", "Preset Ratio", "Scale", "Same Size"], default: "Scale" },
+    { key: "scale", type: "number", min: 1, max: 4, step: 0.05, default: 2.0 },
+    { key: "megapixels", type: "number", min: 0.01, max: 64, step: 0.01, default: 2.0 },
+    { key: "width", type: "number", min: 64, max: 8192, step: 8, default: 1920 },
+    { key: "height", type: "number", min: 64, max: 8192, step: 8, default: 1080 },
+    { key: "divisible_by", type: "combo", options: ["8", "16", "32", "64", "128"], default: "8" },
+    { key: "ratio_preset", type: "combo", options: ["1:1", "4:3", "3:2", "16:9", "21:9"], default: "16:9" },
+    { key: "resize_method", type: "combo", options: ["Center Crop (Fill)", "Letterbox (Fit)"], default: "Center Crop (Fill)" },
+    { key: "device_id", type: "number", min: 0, max: 8, step: 1, default: 0 },
+    { key: "empty_cache", type: "boolean", default: false },
+    { key: "use_mmap", type: "boolean", default: true },
+    { key: "auto_unload_models", type: "boolean", default: true },
+  ],
+  watermark: [
+    { key: "watermark_path", type: "imagePicker" },
+    { key: "position", type: "combo", options: ["bottom-right", "bottom-left", "top-right", "top-left", "center"], default: "bottom-right" },
+  ],
+};
+// Saver option specs (image / video) for the save-node gear, same field-list format.
+const PP_IMAGE_SAVE_FIELDS = [
+  { key: "filename_prefix", type: "text", default: "Director" },
+  { key: "file_format", type: "combo", options: ["webp", "png"], default: "png" },
+  { key: "compression", type: "number", min: 0, max: 100, step: 1, default: 0 },
+];
+const PP_VIDEO_SAVE_FIELDS = [
+  { key: "filename_prefix", type: "text", default: "Director/video" },
+  { key: "codec", type: "combo", options: ["Auto", "AV1", "VP9", "H.265 (HEVC)", "H.264"], default: "Auto" },
+  { key: "container", type: "combo", options: ["Auto", "WebM", "MKV", "MP4", "Animated WebP", "Animated AVIF"], default: "Auto" },
+  { key: "bit_depth", type: "combo", options: ["Auto", "8-bit", "10-bit"], default: "Auto" },
+  { key: "quality", type: "number", min: 0, max: 51, step: 1, default: 20 },
+  { key: "pingpong", type: "boolean", default: false },
+  { key: "crop_to_audio", type: "boolean", default: false },
+  { key: "audio_codec", type: "combo", options: ["Auto", "AAC", "Opus", "MP3"], default: "Auto" },
+  { key: "audio_bitrate", type: "combo", options: ["64k", "96k", "128k", "160k", "192k", "256k", "320k"], default: "192k" },
+  { key: "save_first_frame", type: "boolean", default: false },
+  { key: "save_last_frame", type: "boolean", default: false },
+];
+// Tuning for the MiniMax H3 Cache optimization (opened from its pill), mirroring the
+// standalone DaSiWa "MiniMax H3 Cache" node.
+const PP_H3_CACHE_FIELDS = [
+  { key: "reuse_threshold", type: "number", min: 0, max: 1, step: 0.01, default: 0.05 },
+  { key: "start_percent", type: "number", min: 0, max: 1, step: 0.01, default: 0.15 },
+  { key: "end_percent", type: "number", min: 0, max: 1, step: 0.01, default: 0.90 },
+  { key: "max_steps", type: "number", min: 1, max: 10, step: 1, default: 2 },
+  { key: "device", type: "combo", options: ["auto", "cuda", "cpu"], default: "auto" },
+  { key: "verbose", type: "boolean", default: false },
+];
+// Fetch a ComfyUI model-folder listing (e.g. "upscale_models", "frame_interpolation").
+async function ppLoadModelList(folder) {
+  try {
+    const res = await fetch(api.apiURL(`/models/${encodeURIComponent(folder)}`));
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data.map(String) : [];
+  } catch { return []; }
+}
+// Fetch the ComfyUI input-folder image listing (the DaSiWa route registered by
+// nodes/input_images.py). Used to feed the watermark picker with real images.
+async function ppLoadInputImages() {
+  try {
+    const res = await fetch(api.apiURL("/dasiwa/input-images"));
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data.images) ? data.images.map(String) : [];
+  } catch { return []; }
+}
+// Build a "select from the ComfyUI input folder" control: a dropdown fed by the
+// input-folder listing, a live thumbnail preview of the chosen image, and an
+// upload button that drops a new image into the input folder and selects it.
+// Sets target[key] as the user interacts; returns immediately (list loads async).
+function ppImagePicker(field, key, target, inputStyle, currentValue) {
+  const box = document.createElement("div"); box.style.cssText = "display:flex;flex-direction:column;gap:5px";
+  const row = document.createElement("div"); row.style.cssText = "display:flex;gap:6px;align-items:center";
+  const select = document.createElement("select"); select.style.cssText = inputStyle + ";flex:1;min-width:0"; select.disabled = true;
+  const ph = document.createElement("option"); ph.value = "(loading…)"; ph.textContent = "(loading…)"; ph.selected = true; select.append(ph);
+  const uploadBtn = document.createElement("button"); uploadBtn.textContent = "Upload"; uploadBtn.title = "Upload a watermark image into the ComfyUI input folder";
+  uploadBtn.style.cssText = "padding:3px 9px;background:rgba(74,144,217,.15);border:1px solid rgba(74,144,217,.4);border-radius:4px;color:#a8d4ff;cursor:pointer;font-size:11px;white-space:nowrap";
+  row.append(select, uploadBtn);
+  const preview = document.createElement("div");
+  const renderPreview = (path) => {
+    preview.innerHTML = ""; if (!path) return;
+    const img = document.createElement("img"); img.src = viewUrl(path); img.style.cssText = "max-width:140px;max-height:64px;object-fit:contain;border:1px solid #2f5478;border-radius:4px;background:#080d11;padding:2px";
+    const cap = document.createElement("span"); cap.textContent = path; cap.style.cssText = "display:block;font-size:9px;color:#6fa8e0;margin-top:2px";
+    preview.append(img, cap);
+  };
+  const populate = (images) => {
+    select.innerHTML = "";
+    const opts = images.length ? images : ["(no images in input folder)"];
+    for (const opt of opts) { const o = document.createElement("option"); o.value = opt; o.textContent = opt; if (opt === currentValue) o.selected = true; select.append(o); }
+    if (currentValue && !images.includes(currentValue)) { const o = document.createElement("option"); o.value = currentValue; o.textContent = `${currentValue} (current)`; o.selected = true; select.append(o); }
+    select.disabled = false;
+    select.onchange = () => { target[key] = select.value; renderPreview(select.value); };
+    renderPreview(select.value);
+  };
+  const refresh = () => ppLoadInputImages().then(populate).catch(() => populate([]));
+  const fileInput = document.createElement("input"); fileInput.type = "file"; fileInput.accept = "image/*"; fileInput.style.display = "none";
+  uploadBtn.onclick = () => fileInput.click();
+  fileInput.onchange = async () => {
+    const file = fileInput.files[0]; fileInput.value = ""; if (!file) return;
+    uploadBtn.disabled = true;
+    try {
+      const rel = await uploadFile(file, uploadBtn);
+      await refresh();
+      if (Array.from(select.options).some(o => o.value === rel)) select.value = rel;
+      target[key] = rel; renderPreview(rel);
+      uploadBtn.textContent = "Upload";
+    } catch {
+      uploadBtn.textContent = "Failed";
+    } finally {
+      uploadBtn.disabled = false;
+    }
+  };
+  box.append(row, preview, fileInput);
+  field.append(box);
+  void refresh();
+}
 let cssInstalled = false;
 
 function installStyles() {
@@ -47,7 +196,7 @@ function installStyles() {
   style.textContent += `.ds-h3-preview-overlay{position:fixed;inset:0;z-index:10001;display:flex;align-items:center;justify-content:center;background:rgba(8,10,14,.6)}.ds-h3-preview-panel{width:min(600px,90vw);max-height:85vh;display:flex;flex-direction:column;background:#111820;border:1px solid #40515e;border-radius:10px;overflow:hidden;box-shadow:0 8px 32px #000}.ds-h3-preview-header,.ds-h3-preview-meta{padding:8px 12px;background:#0d1217;color:#dbe7f0}.ds-h3-preview-header{display:flex;justify-content:space-between;border-bottom:1px solid #344452}.ds-h3-preview-body{padding:12px;background:#090d11;display:flex;justify-content:center}.ds-h3-preview-media{max-width:100%;max-height:40vh;object-fit:contain}.ds-h3-preview-controls{padding:8px 12px;background:#0d1217;display:flex;flex-direction:column;gap:6px}.ds-h3-preview-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;color:#9fb3c2}.ds-h3-preview-row input[type="number"]{width:60px;padding:2px 4px;background:#111a21;color:#dbe7f0;border:1px solid #40515e;border-radius:3px}.ds-h3-preview-row input[type="text"],.ds-h3-preview-row textarea{flex:1;min-width:150px;padding:3px 5px;background:#111a21;color:#dbe7f0;border:1px solid #40515e;border-radius:3px;font-size:11px}.ds-h3-preview-row textarea{resize:vertical;min-height:30px}.ds-h3-preview-meta{font-size:11px;color:#9fb3c2;border-top:1px solid #344452}`;
   style.textContent += `
     .ds-h3-docs{font-weight:700;min-width:26px;padding:4px 8px!important}.ds-h3-ruler{display:none}.ds-h3-clip.video{width:var(--clip-width)!important;min-width:180px!important}.ds-h3-clip-identity{position:absolute;left:5px;top:4px;z-index:5;padding:1px 4px;border-radius:3px;background:rgba(0,0,0,.65);color:#fff;font-size:10px;font-weight:700;pointer-events:none}.ds-h3-video-scale{position:absolute;left:12px;right:12px;top:27px;height:44px;pointer-events:none;opacity:.8;background:repeating-linear-gradient(90deg,rgba(216,174,245,.82) 0,rgba(216,174,245,.82) 1px,transparent 1px,transparent 12px),linear-gradient(transparent 48%,rgba(216,174,245,.7) 49%,rgba(216,174,245,.7) 52%,transparent 53%)}.ds-h3-prompt-panel{min-height:120px;overflow:visible}.ds-h3-prompt-field{position:relative;flex:none;min-height:90px}.ds-h3-prompt-panel .ds-h3-prompt-field>.ds-h3-prompt{height:100%;min-height:0;padding-bottom:16px;resize:none}.ds-h3-prompt-field-resizer{position:absolute;bottom:0;left:0;width:100%;height:12px;cursor:ns-resize;display:flex;justify-content:center;align-items:flex-end;padding-bottom:4px;box-sizing:border-box;z-index:2;touch-action:none}.ds-h3-prompt-field-resizer::after{content:"";width:40px;height:4px;background:rgba(255,255,255,.16);border-radius:2px}.ds-h3-prompt-field-resizer:hover::after,.ds-h3-prompt-field-resizer.active::after{background:rgba(141,215,255,.8)}
-    .ds-h3-video-stream-controls{position:absolute;right:5px;top:4px;z-index:7;display:flex;gap:3px}.ds-h3-clip.selected .ds-h3-video-stream-controls{right:24px}.ds-h3-video-stream-controls button{min-width:24px;padding:3px 6px!important;font-size:11px;line-height:14px;background:rgba(10,17,23,.85)!important}.ds-h3-video-stream-controls button.active{background:rgba(125,82,188,.9)!important;border-color:#d4b3ff;color:#fff}.ds-h3-lock-icon{position:absolute;right:4px;top:4px;z-index:8;font-size:13px;color:#f3c67a;text-shadow:0 0 4px rgba(0,0,0,.9);pointer-events:none}.ds-h3-edit-btn{position:absolute;right:5px;bottom:5px;z-index:7;font-size:14px;padding:3px 6px!important;border-radius:3px!important;background:rgba(20,35,45,.8)!important;border-color:rgba(100,150,180,.5)!important}.ds-h3-empty-slot{display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:#7eeba7;border:1.5px dashed #7eeba7;border-radius:6px;cursor:pointer;box-sizing:border-box;background:rgba(126,235,167,.06);transition:all .15s ease;pointer-events:auto}.ds-h3-empty-slot:hover{background:rgba(126,235,167,.18);border-color:#bff3d0;color:#d4ffe1;box-shadow:0 0 14px rgba(126,235,167,.45);transform:scale(1.02)}.ds-h3-timeline-lane.disabled .ds-h3-empty-slot{opacity:.15;cursor:not-allowed;pointer-events:none}.ds-h3-timeline-lane.audio .ds-h3-empty-slot{color:#5b8dd9;border-color:#5b8dd9;background:rgba(91,141,217,.06)}.ds-h3-timeline-lane.audio .ds-h3-empty-slot:hover{background:rgba(91,141,217,.18);border-color:#8bb4f0;color:#b3d4fc;box-shadow:0 0 14px rgba(91,141,217,.45)}.ds-h3-prompt-panel.disabled{opacity:.5;filter:grayscale(.55)}.ds-h3-prompt-panel.disabled textarea,.ds-h3-prompt-panel.disabled input,.ds-h3-prompt-panel.disabled button{pointer-events:none}.ds-h3-ext-note{font-weight:600;color:#7ec8f0}.ds-h3-prompt-mode-btn{white-space:nowrap}.ds-h3-modebar .ds-h3-prompt-mode-btn.active{background:rgba(126,235,167,.14)!important;color:#d7ffe3!important;border-color:rgba(126,235,167,.9)!important;box-shadow:0 0 8px rgba(126,235,167,.45);font-weight:700}.ds-h3-global-prompt{min-height:140px}
+    .ds-h3-video-stream-controls{position:absolute;right:5px;top:4px;z-index:7;display:flex;gap:3px}.ds-h3-clip.selected .ds-h3-video-stream-controls{right:24px}.ds-h3-video-stream-controls button{min-width:24px;padding:3px 6px!important;font-size:11px;line-height:14px;background:rgba(10,17,23,.85)!important}.ds-h3-video-stream-controls button.active{background:rgba(125,82,188,.9)!important;border-color:#d4b3ff;color:#fff}.ds-h3-lock-icon{position:absolute;right:4px;top:4px;z-index:8;font-size:13px;color:#f3c67a;text-shadow:0 0 4px rgba(0,0,0,.9);pointer-events:none}.ds-h3-edit-btn{position:absolute;right:5px;bottom:5px;z-index:7;font-size:14px;padding:3px 6px!important;border-radius:3px!important;background:rgba(20,35,45,.8)!important;border-color:rgba(100,150,180,.5)!important}.ds-h3-empty-slot{display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:#7eeba7;border:1.5px dashed #7eeba7;border-radius:6px;cursor:pointer;box-sizing:border-box;background:rgba(126,235,167,.06);transition:all .15s ease;pointer-events:auto}.ds-h3-empty-slot:hover{background:rgba(126,235,167,.18);border-color:#bff3d0;color:#d4ffe1;box-shadow:0 0 14px rgba(126,235,167,.45);transform:scale(1.02)}.ds-h3-timeline-lane.disabled .ds-h3-empty-slot{opacity:.15;cursor:not-allowed;pointer-events:none}.ds-h3-timeline-lane.audio .ds-h3-empty-slot{color:#5b8dd9;border-color:#5b8dd9;background:rgba(91,141,217,.06)}.ds-h3-timeline-lane.audio .ds-h3-empty-slot:hover{background:rgba(91,141,217,.18);border-color:#8bb4f0;color:#b3d4fc;box-shadow:0 0 14px rgba(91,141,217,.45)}.ds-h3-prompt-panel.disabled{opacity:.5;filter:grayscale(.55)}.ds-h3-prompt-panel.disabled textarea,.ds-h3-prompt-panel.disabled input,.ds-h3-prompt-panel.disabled button{pointer-events:none}.ds-h3-ext-note{font-weight:600;color:#7ec8f0}.ds-h3-prompt-mode-btn{white-space:nowrap}.ds-h3-pp-btn{display:inline-flex;align-items:center;gap:5px;padding:4px 10px!important;border-radius:999px!important;background:transparent!important;color:#9fb3c2!important;font-size:11px!important;font-family:inherit;border:1px solid #40515e!important;cursor:pointer;white-space:nowrap;transition:all .16s ease}.ds-h3-pp-btn:hover{background:rgba(74,144,217,.12)!important;border-color:rgba(74,144,217,.5)!important}.ds-h3-pp-btn.active{background:rgba(74,144,217,.18)!important;color:#a8d4ff!important;border-color:rgba(74,144,217,.85)!important;box-shadow:0 0 12px rgba(74,144,217,.5);font-weight:700}.ds-h3-pp-summary{color:#6fa8e0;font-size:10px!important;font-weight:400!important}.ds-h3-pp-burger{display:inline-flex;align-items:center;justify-content:center;min-width:16px;min-height:16px;padding:0 4px!important;font-size:9px!important;background:rgba(74,144,217,.22)!important;border:1px solid rgba(74,144,217,.45)!important;border-radius:3px!important;color:#cfe6ff!important;cursor:pointer;white-space:nowrap;margin-left:2px}.ds-h3-pp-btn.active .ds-h3-pp-burger{background:rgba(74,144,217,.35)!important;border-color:rgba(74,144,217,.7)!important}.ds-h3-modebar .ds-h3-prompt-mode-btn.active{background:rgba(126,235,167,.14)!important;color:#d7ffe3!important;border-color:rgba(126,235,167,.9)!important;box-shadow:0 0 8px rgba(126,235,167,.45);font-weight:700}.ds-h3-global-prompt{min-height:140px}
   `;
   style.textContent += `.ds-h3-res-field{display:flex;flex-direction:column;gap:3px;min-width:150px;font-size:10px;font-weight:600;letter-spacing:.4px;color:#8fb3d6;text-transform:uppercase}.ds-h3-res-control{display:flex;position:relative}.ds-h3-res-select{position:absolute;inset:0;width:100%;opacity:0;pointer-events:none}.ds-h3-res-btn{width:100%;display:flex;align-items:center;gap:8px;box-sizing:border-box;min-height:30px;padding:0 9px;background:#16283a;border:1px solid #2f5478;border-radius:5px;color:#d6ebff;font:12px system-ui,sans-serif;cursor:pointer;text-align:left;transition:background .16s ease,border-color .16s ease,box-shadow .16s ease}.ds-h3-res-btn:hover:not(:disabled){background:#1d3550;border-color:#3f79b4;box-shadow:0 0 9px rgba(74,144,217,.28)}.ds-h3-res-btn:focus-visible{outline:none;border-color:#4f97d6;box-shadow:0 0 0 2px rgba(74,144,217,.35)}.ds-h3-res-btn:disabled{opacity:.4;cursor:not-allowed}.ds-h3-res-label{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ds-h3-res-caret{flex:none;color:#6fa8e0;font-size:9px;transition:transform .18s ease}.ds-h3-res-btn[aria-expanded="true"] .ds-h3-res-caret{transform:rotate(180deg)}.ds-h3-res-swatch{flex:none;display:flex;align-items:center;justify-content:center;width:20px;height:20px}.ds-h3-res-swatch-box{background:#3f79b4;border:1px solid #9fd0ff;border-radius:1px;box-shadow:inset 0 0 4px rgba(0,0,0,.4);transition:background .16s ease,border-color .16s ease,box-shadow .16s ease}.ds-h3-res-btn:hover:not(:disabled) .ds-h3-res-swatch-box,.ds-h3-res-btn[aria-expanded="true"] .ds-h3-res-swatch-box{background:#5b9be0;border-color:#c4e4ff}.ds-h3-res-menu{position:absolute;top:calc(100% + 4px);left:0;z-index:2500;min-width:100%;max-height:290px;overflow-y:auto;padding:4px;background:#101c28;border:1px solid #35618f;border-radius:6px;box-shadow:0 10px 30px rgba(0,0,0,.65);display:none}.ds-h3-res-menu.open{display:block}.ds-h3-res-menu.grid.open{display:grid;gap:2px}.ds-h3-res-menu.grid .ds-h3-res-item-label{white-space:normal;overflow-wrap:anywhere}.ds-h3-res-menu[data-place="up"]{top:auto;bottom:calc(100% + 4px)}.ds-h3-res-item{display:flex;align-items:center;gap:8px;width:100%;box-sizing:border-box;padding:6px 9px;background:transparent;border:0;border-radius:4px;color:#cfe3f7;font:12px system-ui,sans-serif;cursor:pointer;text-align:left;transition:background .12s ease,color .12s ease,box-shadow .12s ease}.ds-h3-res-item:hover{background:rgba(74,144,217,.24);color:#fff;box-shadow:inset 0 0 0 1px rgba(96,168,232,.35)}.ds-h3-res-item.active{background:rgba(74,144,217,.34);color:#fff;font-weight:600;box-shadow:inset 0 0 0 1px rgba(120,190,255,.55)}.ds-h3-res-item.active:hover{background:rgba(74,144,217,.44)}.ds-h3-res-item-label{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ds-h3-res-num{width:100%;box-sizing:border-box;height:30px;padding:0 8px;background:#16283a;border:1px solid #2f5478;border-radius:5px;color:#d6ebff;font:12px system-ui,sans-serif;transition:background .16s ease,border-color .16s ease,box-shadow .16s ease}.ds-h3-res-num:hover:not(:disabled){background:#1d3550;border-color:#3f79b4}.ds-h3-res-num:focus{outline:none;border-color:#4f97d6;box-shadow:0 0 0 2px rgba(74,144,217,.3)}.ds-h3-res-num:disabled{opacity:.4;cursor:not-allowed}.ds-h3-res-menu.cols.open{display:flex;align-items:flex-start;gap:7px}.ds-h3-res-col{display:flex;flex-direction:column;gap:2px;min-width:84px}.ds-h3-res-col-title{font-size:9px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#6fa8e0;padding:1px 9px 3px;border-bottom:1px solid #2f5478;margin-bottom:2px}.ds-h3-res-menu.cols .ds-h3-res-item{white-space:nowrap}`;
   document.head.appendChild(style);
@@ -173,7 +322,8 @@ function install(node) {
   let state = parseState(dataWidget.value);
   const DEFAULT_POSTPROCESS_RECIPE = [{ id: "frame_interpolation", enabled: false, factor: 2, model: "rife_v4.26.safetensors" }, { id: "torch_resize", enabled: false, size_mode: "Multiplier", scale_multiplier: 2, interpolation: "Lanczos" }, { id: "model_upscale", enabled: false, model_name: "2x-AnimeSharpV4_RCAN.safetensors" }, { id: "rtx_refiner", enabled: false, upscale: "VSR", upscale_quality: "Ultra" }, { id: "watermark", enabled: false, watermark_path: "", position: "bottom-right" }];
   state.postprocess_recipe = Array.isArray(state.postprocess_recipe) ? state.postprocess_recipe : DEFAULT_POSTPROCESS_RECIPE;
-  state.internal_execution = state.internal_execution && typeof state.internal_execution === "object" ? state.internal_execution : { sampler: "res_multistep", scheduler: "simple", steps: 25, shift_video: 11, shift_audio: 4 };
+  state.internal_execution = { sampler: "res_multistep", scheduler: "simple", steps: 25, shift_video: 11, shift_audio: 4, comfy_kitchen_attention: false, cache: { enabled: false, reuse_threshold: 0.05, start_percent: 0.15, end_percent: 0.90, max_steps: 2, device: "auto", verbose: false }, ...(state.internal_execution && typeof state.internal_execution === "object" ? state.internal_execution : {}) };
+  state.internal_execution.cache = { enabled: false, reuse_threshold: 0.05, start_percent: 0.15, end_percent: 0.90, max_steps: 2, device: "auto", verbose: false, ...(state.internal_execution.cache && typeof state.internal_execution.cache === "object" ? state.internal_execution.cache : {}) };
   state.internal_execution.save = { output_kind: "image", filename_prefix: "DaSiWa_MiniMaxH3_%date:yyyyMMdd%_%seed%", file_format: "png", compression: 0, save_output: true, save_workflow: true, codec: "Auto", container: "Auto", bit_depth: "Auto", quality: 20, pingpong: false, crop_to_audio: false, audio_codec: "Auto", audio_bitrate: "192k", save_first_frame: false, save_last_frame: false, model_hash: "", text_positive: "", text_negative: "", text_steps: 0, text_cfg: 0, text_sampler: "", text_scheduler: "", text_seed: 0, text_model: "", ...(state.internal_execution.save || {}) };
   let selectedModeOverride = null;
   const mode = () => selectedModeOverride ?? (node.widgets?.find(w => w.name === "mode")?.value || "FL2VA");
@@ -758,28 +908,110 @@ function install(node) {
   }
 
   const render = () => {
+    if (!Array.isArray(state.postprocess_recipe)) state.postprocess_recipe = DEFAULT_POSTPROCESS_RECIPE;
     timeline.replaceChildren();
     const selected = state.items.find(item => item.id === selectedId);
     const modeGroup = document.createElement("div"); modeGroup.className = "ds-h3-mode-group"; modeGroup.style.display = "flex"; modeGroup.style.flexDirection = "column"; modeGroup.style.alignItems = "flex-start"; modeGroup.style.gap = "4px"; modeGroup.style.padding = "6px"; modeGroup.style.background = "#0d1217"; modeGroup.style.border = "1px solid #344452"; modeGroup.style.borderRadius = "6px";
     const topRow = document.createElement("div"); topRow.className = "ds-h3-modebar"; topRow.style.flexWrap = "wrap"; topRow.style.gap = "8px"; topRow.style.padding = "0"; topRow.style.border = "0"; topRow.style.background = "transparent"; topRow.style.width = "100%";
     const controlGroup = () => { const group = document.createElement("span"); group.className = "ds-h3-actions"; group.style.cssText = "gap:4px;flex-wrap:nowrap;white-space:nowrap"; return group; };
     const modesSide = controlGroup(); const modeLabel = document.createElement("span"); modeLabel.textContent = "Model Mode:"; modeLabel.style.cssText = "color:#9fb3c2;font-weight:600"; modesSide.append(modeLabel); ["T2VA", "I2VA", "FL2VA", "L2VA", "REF2VA", "Image Inpaint"].forEach(value => { const button = document.createElement("button"); button.textContent = value; button.title = value === "Image Inpaint" ? "One image reference; output exactly one frame through Get Image from Batch." : `Use MiniMax H3 ${value} mode`; button.classList.toggle("active", mode() === value); button.onclick = () => { const previousMode = mode(); if (value === "Image Inpaint") { const images = activeItems().filter(item => item.type === "image"); if (!images.length) setStatus("Image Inpaint selected — add one image reference to continue."); state.items = state.items.filter(item => item.enabled === false || item.type === "image").map((item, index) => index === 0 ? { ...item, slot: 0, order: 0 } : { ...item, enabled: false }); state.image_inpaint_saved_duration ??= Number(node.widgets?.find(w => w.name === "duration")?.value) || 5; const durationWidget = node.widgets?.find(w => w.name === "duration"); if (durationWidget) { durationWidget.value = 1; durationWidget.callback?.call(durationWidget, 1); } } else if (previousMode === "Image Inpaint" && Number.isFinite(Number(state.image_inpaint_saved_duration))) { const durationWidget = node.widgets?.find(w => w.name === "duration"); if (durationWidget) { durationWidget.value = state.image_inpaint_saved_duration; durationWidget.callback?.call(durationWidget, durationWidget.value); } delete state.image_inpaint_saved_duration; } selectDirectorMode(value); if (selectedLane === "audio" && value !== "REF2VA") selectedLane = "visual"; emit(); render(); }; modesSide.append(button); });
-    const promptSide = controlGroup(); promptSide.style.cssText += ";padding-left:8px;border-left:1px solid #344452"; const promptLabel = document.createElement("span"); promptLabel.textContent = "Prompt Mode:"; promptLabel.style.cssText = "color:#9fb3c2;font-weight:600"; promptSide.append(promptLabel); const styleLabel = promptStyle(); [["simple", "Simple"], ["structured", "Structured"]].forEach(([value, label]) => { const promptButton = document.createElement("button"); promptButton.className = "ds-h3-prompt-mode-btn"; promptButton.textContent = label; promptButton.classList.toggle("active", styleLabel === value); promptButton.title = `Use the ${label.toLowerCase()} prompt editor`; promptButton.onclick = () => { if (styleLabel === value) return; if (value === "simple") builderState.simple_prompt = previewTextFor(mode(), false); builderState.prompt_mode = value; emit(); render(); }; promptSide.append(promptButton); });
+    const promptSide = controlGroup(); const promptLabel = document.createElement("span"); promptLabel.textContent = "Prompt Mode:"; promptLabel.style.cssText = "color:#9fb3c2;font-weight:600"; promptSide.append(promptLabel); const styleLabel = promptStyle(); [["simple", "Simple"], ["structured", "Structured"]].forEach(([value, label]) => { const promptButton = document.createElement("button"); promptButton.className = "ds-h3-prompt-mode-btn"; promptButton.textContent = label; promptButton.classList.toggle("active", styleLabel === value); promptButton.title = `Use the ${label.toLowerCase()} prompt editor`; promptButton.onclick = () => { if (styleLabel === value) return; if (value === "simple") builderState.simple_prompt = previewTextFor(mode(), false); builderState.prompt_mode = value; emit(); render(); }; promptSide.append(promptButton); });
     const actionsSide = controlGroup(); actionsSide.style.cssText += ";padding-left:8px;border-left:1px solid #344452"; const hasContent = state.items.length || state.prompt_blocks?.length || hasBuilderContent() || String(promptWidget?.value || "").trim(); if (selected) { if (!isLockedSlot(selected)) { const removeButton = document.createElement("button"); removeButton.className = "ds-h3-remove-btn"; removeButton.textContent = "Remove"; removeButton.title = `Remove selected ${selected.type}`; removeButton.onclick = () => remove(selected.id); actionsSide.append(removeButton); } else { setStatus(`${mediaReferenceName(selected.type)} ${selected.slot + 1} is locked in L2VA mode`, true); } } if (hasContent) { const clearButton = document.createElement("button"); clearButton.className = "ds-h3-clear-btn"; clearButton.textContent = "Clear"; clearButton.title = "Remove all media and prompts"; clearButton.onclick = clearAll; actionsSide.append(clearButton); } else { const clearButton = document.createElement("button"); clearButton.className = "ds-h3-clear-btn ds-h3-clear-btn-empty"; clearButton.textContent = "Clear"; clearButton.title = "Nothing to clear yet"; clearButton.onclick = () => setStatus("Nothing to clear."); actionsSide.append(clearButton); }
-    const spacer = document.createElement("span"); spacer.style.flex = "1";
     const docsButton = document.createElement("button"); docsButton.className = "ds-h3-docs"; docsButton.textContent = "?"; docsButton.title = "Open MiniMax H3 Director documentation on GitHub"; docsButton.onclick = () => window.open(REPOSITORY_URL, "_blank", "noopener,noreferrer");
-    topRow.append(modesSide, promptSide, actionsSide, spacer, docsButton); modeGroup.append(topRow);
+    topRow.append(modesSide, actionsSide, docsButton); modeGroup.append(topRow);
+    const promptRow = document.createElement("div"); promptRow.className = "ds-h3-modebar"; promptRow.style.cssText = "padding:0;border:0;background:transparent;width:100%"; promptRow.append(promptSide); modeGroup.append(promptRow);
     const modeHint = { T2VA: "T2VA · no input frame", I2VA: "I2VA · one opening-frame slot", FL2VA: "FL2VA · opening and closing-frame slots", L2VA: "L2VA · one closing-frame slot", "Image Inpaint": "Image Inpaint · exactly one image · output frame count 1 · no video/audio" }; const hint = document.createElement("div"); hint.className = "ds-h3-mode-hint"; hint.style.fontSize = "11px"; hint.style.color = "#9fb3c2"; hint.style.margin = "0"; hint.textContent = modeHint[mode()] || `REF2VA · up to ${MAX.image} image, ${MAX.video} video, and ${MAX.audio} audio slots · ${MAX.total} combined files maximum`; modeGroup.append(hint);
     // Prompt controls belong with the mode pills; save configuration has one
     // owner: the dedicated Save node panel.
-    const controlRow = document.createElement("div"); controlRow.className = "ds-h3-control-row"; controlRow.style.cssText = "width:100%;box-sizing:border-box;display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,.8fr) minmax(0,.9fr);gap:6px;margin-top:6px";
-    const postprocessPanel = document.createElement("section"); postprocessPanel.className = "ds-h3-postprocess"; postprocessPanel.style.cssText = "min-width:0;box-sizing:border-box;display:flex;flex-direction:column;gap:6px;padding:8px;background:#0d1217;border:1px solid #344452;border-radius:6px";
+    const controlRow = document.createElement("div"); controlRow.className = "ds-h3-control-row"; controlRow.style.cssText = "width:100%;box-sizing:border-box;display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:6px;margin-top:6px";
+    const postprocessPanel = document.createElement("div"); postprocessPanel.className = "ds-h3-postprocess-row"; postprocessPanel.style.cssText = "width:100%;box-sizing:border-box;display:flex;flex-wrap:wrap;align-items:center;gap:5px;padding:4px 0 0;border-top:1px solid #344452;margin-top:2px";
     const saveNodePanel = document.createElement("section"); saveNodePanel.className = "ds-h3-save-node"; saveNodePanel.style.cssText = "min-width:0;box-sizing:border-box;display:flex;flex-direction:column;gap:6px;padding:8px;background:#0d1217;border:1px solid #344452;border-radius:6px";
+    let optimizationPanel = null;
     {
 
-      const openStageSettings = (label, target, visibleKeys = null) => { const overlay = document.createElement("div"); overlay.style.cssText = "position:fixed;inset:0;z-index:10020;display:grid;place-items:center;background:rgba(0,0,0,.66)"; const modal = document.createElement("div"); modal.style.cssText = "width:min(520px,calc(100vw - 32px));max-height:80vh;overflow:auto;padding:14px;background:#111a21;border:1px solid #4c6b80;border-radius:8px;color:#d5e6f2"; const heading = document.createElement("h3"); heading.textContent = label; heading.style.margin = "0 0 10px"; modal.append(heading); const fields = []; Object.entries(target).filter(([key]) => key !== "id" && key !== "enabled" && !AUTOMATIC_SAVE_METADATA_KEYS.has(key) && (visibleKeys === null || visibleKeys.has(key))).forEach(([key, value]) => { const field = document.createElement("label"); field.style.cssText = "display:flex;flex-direction:column;gap:3px;margin:7px 0;font-size:11px"; field.textContent = key.replaceAll("_", " "); const input = document.createElement("input"); input.value = String(value ?? ""); input.type = typeof value === "boolean" ? "checkbox" : typeof value === "number" ? "number" : "text"; if (typeof value === "boolean") input.checked = value; field.append(input); fields.push([key, input, typeof value]); modal.append(field); }); const actions = document.createElement("div"); actions.style.cssText = "display:flex;justify-content:flex-end;gap:6px;margin-top:12px"; const cancel = document.createElement("button"); cancel.textContent = "Cancel"; cancel.onclick = () => overlay.remove(); const save = document.createElement("button"); save.textContent = "Save"; save.onclick = () => { for (const [key, input, kind] of fields) target[key] = kind === "number" ? Number(input.value) : kind === "boolean" ? input.checked : input.value; emit(); overlay.remove(); render(); }; actions.append(cancel, save); modal.append(actions); overlay.onclick = event => { if (event.target === overlay) overlay.remove(); }; overlay.append(modal); document.body.append(overlay); };
-      for (const stage of state.postprocess_recipe) { const row = document.createElement("div"); row.style.cssText = "display:grid;grid-template-columns:minmax(130px,1fr) minmax(90px,1fr) auto auto;gap:6px;align-items:center;color:#9fb3c2;font-size:11px"; const toggle = document.createElement("input"); toggle.type = "checkbox"; toggle.checked = Boolean(stage.enabled); toggle.onchange = () => { stage.enabled = toggle.checked; emit(); }; const summary = stage.id === "torch_resize" ? `${stage.interpolation} ×${stage.scale_multiplier}` : stage.id === "watermark" ? (stage.watermark_path || "not set") : stage.id.replaceAll("_", " "); const gear = document.createElement("button"); gear.textContent = "⚙"; gear.title = `Configure ${stage.id.replaceAll("_", " ")}`; gear.onclick = () => openStageSettings(stage.id.replaceAll("_", " "), stage); row.append(document.createTextNode(stage.id.replaceAll("_", " ")), document.createTextNode(summary), toggle, gear); postprocessPanel.append(row); }
-      const postprocessTitle = document.createElement("strong"); postprocessTitle.textContent = "Post processing"; postprocessTitle.style.cssText = "font-size:12px;color:#d5e6f2;order:-1"; postprocessPanel.prepend(postprocessTitle);
+      const openStageSettings = (label, target, fieldList) => {
+        const fields = fieldList || (target.id ? (PP_STAGE_FIELDS[target.id] || []) : []);
+        const overlay = document.createElement("div"); overlay.style.cssText = "position:fixed;inset:0;z-index:10020;display:grid;place-items:center;background:rgba(0,0,0,.66)";
+        const modal = document.createElement("div"); modal.style.cssText = "width:min(520px,calc(100vw - 32px));max-height:80vh;overflow:auto;padding:14px;background:#111a21;border:1px solid #4c6b80;border-radius:8px;color:#d5e6f2";
+        const heading = document.createElement("h3"); heading.textContent = label; heading.style.margin = "0 0 10px"; modal.append(heading);
+        const body = document.createElement("div"); modal.append(body);
+        const inputStyle = "padding:3px 6px;background:#16283a;border:1px solid #2f5478;border-radius:4px;color:#d6ebff;font:12px system-ui,sans-serif";
+        const ensureValue = (fspec) => { if (!(fspec.key in target)) target[fspec.key] = fspec.default; };
+        const makeCombo = (fspec, options, selected) => { const select = document.createElement("select"); select.style.cssText = inputStyle; const chosen = options.includes(selected) ? selected : (fspec.default && options.includes(fspec.default) ? fspec.default : options[0]); for (const opt of options) { const o = document.createElement("option"); o.value = opt; o.textContent = opt; if (opt === chosen) o.selected = true; select.append(o); } if (selected != null && selected !== "" && !options.includes(selected)) { const o = document.createElement("option"); o.value = selected; o.textContent = `${selected} (custom)`; o.selected = true; select.append(o); } return select; };
+        for (const fspec of fields) {
+          ensureValue(fspec);
+          const value = target[fspec.key];
+          const field = document.createElement("label"); field.style.cssText = "display:flex;flex-direction:column;gap:3px;margin:7px 0;font-size:11px";
+          const title = document.createElement("span"); title.textContent = fspec.key.replaceAll("_", " "); title.style.cssText = "color:#8fb3d6"; field.append(title);
+          if (fspec.type === "imagePicker") {
+            ppImagePicker(field, fspec.key, target, inputStyle, String(target[fspec.key] || ""));
+            body.append(field);
+          } else if (fspec.type === "modelFolder") {
+            const select = document.createElement("select"); select.style.cssText = inputStyle; select.disabled = true;
+            const placeholder = document.createElement("option"); placeholder.value = "(loading…)"; placeholder.textContent = "(loading…)"; placeholder.selected = true; select.append(placeholder);
+            field.append(select); body.append(field);
+            void ppLoadModelList(fspec.folder).then((options) => {
+              if (!select.isConnected) return;
+              select.innerHTML = "";
+              const opts = options.length ? options : ["(no models in " + fspec.folder + ")"];
+              const current = String(target[fspec.key] || "");
+              for (const opt of opts) { const o = document.createElement("option"); o.value = opt; o.textContent = opt; if (opt === current) o.selected = true; select.append(o); }
+              if (current && !opts.includes(current)) { const o = document.createElement("option"); o.value = current; o.textContent = `${current} (custom)`; o.selected = true; select.append(o); }
+              select.disabled = false; select.onchange = () => { target[fspec.key] = select.value; };
+            }).catch(() => {});
+          } else if (fspec.type === "combo") {
+            const select = makeCombo(fspec, fspec.options, value); select.onchange = () => { target[fspec.key] = select.value; }; field.append(select);
+            body.append(field);
+          } else if (fspec.type === "boolean") {
+            const input = document.createElement("input"); input.type = "checkbox"; input.checked = Boolean(value); input.onchange = () => { target[fspec.key] = input.checked; }; field.append(input);
+            body.append(field);
+          } else {
+            const input = document.createElement("input"); input.type = fspec.type === "number" ? "number" : "text"; input.value = String(value ?? "");
+            if (fspec.type === "number") { if (fspec.min != null) input.min = fspec.min; if (fspec.max != null) input.max = fspec.max; if (fspec.step != null) input.step = fspec.step; }
+            input.onchange = () => { target[fspec.key] = fspec.type === "number" ? Number(input.value) : input.value; };
+            field.append(input);
+            body.append(field);
+          }
+        }
+        const actions = document.createElement("div"); actions.style.cssText = "display:flex;justify-content:flex-end;gap:6px;margin-top:12px";
+        const cancel = document.createElement("button"); cancel.textContent = "Cancel"; cancel.onclick = () => overlay.remove();
+        const save = document.createElement("button"); save.textContent = "Save"; save.onclick = () => { emit(); overlay.remove(); render(); };
+        actions.append(cancel, save); modal.append(actions);
+        overlay.onclick = event => { if (event.target === overlay) overlay.remove(); };
+        overlay.append(modal); document.body.append(overlay);
+      };
+      for (const stage of state.postprocess_recipe) { const label = ppStageLabel(stage.id); const pill = document.createElement("div"); pill.className = "ds-h3-pp-btn"; pill.setAttribute("role", "button"); pill.setAttribute("tabindex", "0"); pill.classList.toggle("active", Boolean(stage.enabled)); pill.title = `Toggle ${label}`; pill.append(document.createTextNode(label)); const toggleStage = () => { stage.enabled = !stage.enabled; emit(); render(); }; pill.onclick = (event) => { if (event.target.closest(".ds-h3-pp-burger")) return; toggleStage(); }; pill.onkeydown = (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); if (event.target.closest(".ds-h3-pp-burger")) return; toggleStage(); } }; const burger = document.createElement("button"); burger.type = "button"; burger.className = "ds-h3-pp-burger"; burger.textContent = "☰"; burger.title = `Advanced options for ${label}`; burger.onclick = (event) => { event.stopPropagation(); openStageSettings(label, stage); }; pill.append(burger); postprocessPanel.append(pill); }
+      const ppToken = (s) => {
+        switch (s.id) {
+          case "frame_interpolation": return `Frame Interpolation ×${Number(s.factor) || 2}`;
+          case "torch_resize": {
+            const target = (s.size_mode === "Target resolution" && s.width && s.height) ? `${s.width}×${s.height}` : `×${s.scale_multiplier || 1}`;
+            return `Resize ${s.interpolation || "Lanczos"} ${target}`;
+          }
+          case "model_upscale": return `Model Upscale ${(String(s.model_name || "").split("/").pop()) || "model"}`;
+          case "rtx_refiner": {
+            const mode = String(s.upscale || "VSR");
+            return mode === "Off" ? "Refiner (no upscale)" : `Refiner ${mode}${s.upscale_quality && s.upscale_quality !== "Ultra" ? " " + s.upscale_quality.toLowerCase() : ""}`;
+          }
+          case "watermark": return `Watermark ${s.position || "bottom-right"}`;
+          default: return s.id.replaceAll("_", " ");
+        }
+      };
+      const ppActive = state.postprocess_recipe.filter(s => s.enabled);
+      const ppSummary = document.createElement("span"); ppSummary.className = "ds-h3-pp-summary-line"; ppSummary.style.cssText = "width:100%;box-sizing:border-box;text-align:right;font-size:11px;color:#7ee19d;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px";
+      if (ppActive.length) { ppSummary.textContent = ppActive.map(ppToken).join(" → "); } else { ppSummary.style.color = "#5a6b78"; ppSummary.textContent = "post-processing off"; }
+      postprocessPanel.append(ppSummary);
+      const postprocessTitle = document.createElement("span"); postprocessTitle.textContent = "Post processing:"; postprocessTitle.style.cssText = "font-size:11px;color:#9fb3c2;font-weight:600;margin-right:2px"; postprocessPanel.prepend(postprocessTitle);
+      // Optimization pills: Comfy Kitchen INT8 attention + MiniMax H3 residual cache.
+      // Both patch the H3 model inside the Director's internal (Image Inpaint) executor,
+      // so they are applied at runtime rather than wired as standalone graph nodes.
+      const exec = state.internal_execution; exec.cache = exec.cache && typeof exec.cache === "object" ? exec.cache : { enabled: false, reuse_threshold: 0.05, start_percent: 0.15, end_percent: 0.90, max_steps: 2, device: "auto", verbose: false };
+      optimizationPanel = document.createElement("div"); optimizationPanel.className = "ds-h3-optimization-row"; optimizationPanel.style.cssText = "width:100%;box-sizing:border-box;display:flex;flex-wrap:wrap;align-items:center;gap:5px;padding:4px 0 0;border-top:1px solid #344452;margin-top:2px";
+      const optimizationTitle = document.createElement("span"); optimizationTitle.textContent = "Optimizations:"; optimizationTitle.style.cssText = "font-size:11px;color:#9fb3c2;font-weight:600;margin-right:2px"; optimizationPanel.append(optimizationTitle);
+      const makeOptPill = (label, active, detail, onToggle, onSettings) => { const pill = document.createElement("div"); pill.className = "ds-h3-pp-btn"; pill.setAttribute("role", "button"); pill.setAttribute("tabindex", "0"); pill.classList.toggle("active", active); pill.title = `Toggle ${label}`; pill.append(document.createTextNode(label)); const summary = document.createElement("span"); summary.className = "ds-h3-pp-summary"; summary.textContent = detail; pill.append(summary); const toggleOpt = () => { onToggle(); emit(); render(); }; pill.onclick = (event) => { if (event.target.closest(".ds-h3-pp-burger")) return; toggleOpt(); }; pill.onkeydown = (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); if (event.target.closest(".ds-h3-pp-burger")) return; toggleOpt(); } }; const burger = document.createElement("button"); burger.type = "button"; burger.className = "ds-h3-pp-burger"; burger.textContent = "☰"; burger.title = `Configure ${label}`; burger.onclick = (event) => { event.stopPropagation(); onSettings(); }; pill.append(burger); optimizationPanel.append(pill); };
+      const kitchenPillDetail = exec.comfy_kitchen_attention ? "INT8 on" : "INT8 off";
+      makeOptPill("Comfy Kitchen Attention", Boolean(exec.comfy_kitchen_attention), kitchenPillDetail, () => { exec.comfy_kitchen_attention = !exec.comfy_kitchen_attention; }, () => { setStatus("Comfy Kitchen attention: toggles ComfyUI's INT8 kernel for MiniMax H3 at runtime; no tuning options."); });
+      makeOptPill("MiniMax H3 Cache", Boolean(exec.cache.enabled), exec.cache.enabled ? `thr ${Number(exec.cache.reuse_threshold).toFixed(2)}` : "off", () => { exec.cache.enabled = !exec.cache.enabled; }, () => { openStageSettings("MiniMax H3 Cache", exec.cache, PP_H3_CACHE_FIELDS); });
       const saveSettings = state.internal_execution.save;
       const outputKind = mode() === "Image Inpaint" ? "image" : "video";
       saveSettings.output_kind = outputKind;
@@ -787,16 +1019,16 @@ function install(node) {
       const saveMode = document.createElement("span"); saveMode.textContent = `${mode()} · always available`; saveMode.style.cssText = "font-size:11px;color:#9fb3c2";
       const saveOutput = document.createElement("label"); saveOutput.style.cssText = "display:flex;gap:6px;align-items:center;font-size:11px;color:#c8d7e3"; const saveOutputToggle = document.createElement("input"); saveOutputToggle.type = "checkbox"; saveOutputToggle.checked = saveSettings.save_output !== false; saveOutputToggle.onchange = () => { saveSettings.save_output = saveOutputToggle.checked; emit(); }; saveOutput.append(saveOutputToggle, document.createTextNode("Save output"));
       const saveWorkflow = document.createElement("label"); saveWorkflow.style.cssText = "display:flex;gap:6px;align-items:center;font-size:11px;color:#c8d7e3"; const saveWorkflowToggle = document.createElement("input"); saveWorkflowToggle.type = "checkbox"; saveWorkflowToggle.checked = saveSettings.save_workflow !== false; saveWorkflowToggle.onchange = () => { saveSettings.save_workflow = saveWorkflowToggle.checked; emit(); }; saveWorkflow.append(saveWorkflowToggle, document.createTextNode("Embed workflow"));
-      const saveGear = document.createElement("button"); saveGear.textContent = "⚙"; saveGear.title = "Configure every setting of the internally-used metadata image saver"; saveGear.onclick = () => openStageSettings("Save node", saveSettings, outputKind === "image" ? IMAGE_SAVE_OPTION_KEYS : VIDEO_SAVE_OPTION_KEYS);
+      const saveGear = document.createElement("button"); saveGear.textContent = "⚙"; saveGear.title = "Configure every setting of the internally-used metadata image saver"; saveGear.onclick = () => openStageSettings("Save node", saveSettings, outputKind === "image" ? PP_IMAGE_SAVE_FIELDS : PP_VIDEO_SAVE_FIELDS);
       const savedPreview = node.__dasiwaH3SavedPreview;
       const previewFrame = document.createElement("div"); previewFrame.className = "ds-h3-save-preview"; previewFrame.style.cssText = "min-height:96px;display:grid;place-items:center;background:#080d11;border:1px solid #2d4658;border-radius:4px;overflow:hidden";
       if (savedPreview?.filename) { const isVideo = String(savedPreview.format || "").startsWith("video/") || savedPreview.container; const media = document.createElement(isVideo ? "video" : "img"); media.src = savedViewUrl(savedPreview); media.title = "Latest Director output"; media.style.cssText = "display:block;width:100%;max-height:180px;object-fit:contain;background:#000;cursor:pointer"; if (isVideo) { media.controls = true; media.muted = true; media.loop = true; media.playsInline = true; } else { media.alt = savedPreview.filename; } media.onclick = () => window.open(media.src, "_blank", "noopener,noreferrer"); previewFrame.append(media); } else { const empty = document.createElement("span"); empty.textContent = "Preview appears after the Director publishes an image or video"; empty.style.cssText = "padding:8px;text-align:center;font-size:11px;color:#9fb3c2"; previewFrame.append(empty); }
       saveNodePanel.append(saveTitle, saveMode, previewFrame, saveOutput, saveWorkflow, saveGear);
-      controlRow.append(modeGroup, postprocessPanel, saveNodePanel);
+      controlRow.append(modeGroup, saveNodePanel);
       timeline.append(controlRow);
     }
 
-    const resolutionPanel = document.createElement("div"); resolutionPanel.className = "ds-h3-resolution-panel"; resolutionPanel.style.cssText = "width:100%;box-sizing:border-box;display:flex;flex-wrap:wrap;align-items:end;gap:6px;padding:7px;margin-top:6px;background:#0d1217;border:1px solid #344452;border-radius:6px";
+    const resolutionPanel = document.createElement("div"); resolutionPanel.className = "ds-h3-resolution-panel"; resolutionPanel.style.cssText = "width:100%;box-sizing:border-box;display:flex;flex-wrap:wrap;align-items:end;gap:6px;padding:2px 0 0;border-top:1px solid #344452;margin-top:2px";
     const settings = resolutionState(); const externalCanvas = hasExternalCanvas(); const currentCanvas = externalCanvas ? ["external", "external"] : (resolveCanvas(settings) || [Number(widthWidget?.value) || 1344, Number(heightWidget?.value) || 768]);
     const updateResolution = patch => mutate(s => { s.resolution = { ...resolutionState(), ...patch }; });
     const closeAllMenus = () => resolutionPanel.querySelectorAll(".ds-h3-res-menu.open").forEach(menu => menu.classList.remove("open"));
@@ -827,7 +1059,7 @@ function install(node) {
     if (settings.aspect === "custom") { for (const [name, key] of [["W", "custom_aspect_w"], ["H", "custom_aspect_h"]]) { const field = document.createElement("label"); field.style.cssText = "display:flex;flex-direction:column;gap:3px;font-size:10px;color:#9fb3c2;width:56px"; field.textContent = `RATIO ${name}`; const input = document.createElement("input"); input.type = "number"; input.min = "1"; input.step = "1"; input.className = "ds-h3-res-num"; input.value = settings[key]; input.onchange = event => updateResolution({ [key]: Math.max(1, Number(event.target.value) || 1) }); field.append(input); resolutionPanel.append(field); } }
     if (settings.resolution === "custom") { addDropdown("CUSTOM", settings.custom_mode || "mp", [["mp", "Megapixels"], ["fixed", "Fixed pixels"]], custom_mode => updateResolution({ custom_mode })); const customKey = (settings.custom_mode || "mp") === "mp" ? "custom_mp" : "custom_width"; if (customKey === "custom_mp") { const field = document.createElement("label"); field.style.cssText = "display:flex;flex-direction:column;gap:3px;font-size:10px;color:#9fb3c2;width:76px"; field.textContent = "MP"; const input = document.createElement("input"); input.type = "number"; input.min = ".01"; input.step = ".01"; input.className = "ds-h3-res-num"; input.value = settings.custom_mp; input.onchange = event => updateResolution({ custom_mp: Number(event.target.value) || settings.custom_mp }); field.append(input); resolutionPanel.append(field); } else { const dimensions = document.createElement("div"); dimensions.className = "ds-h3-fixed-dimensions"; dimensions.style.cssText = "display:flex;gap:6px;align-items:end"; const dimensionField = (label, value, onChange) => { const field = document.createElement("label"); field.style.cssText = "display:flex;flex-direction:column;gap:3px;font-size:10px;color:#9fb3c2;width:76px"; field.textContent = label; const input = document.createElement("input"); input.type = "number"; input.min = "16"; input.step = "16"; input.className = "ds-h3-res-num"; input.value = value; input.onchange = event => onChange(Number(event.target.value) || value); field.append(input); return field; }; const widthField = dimensionField("WIDTH", settings.custom_width, custom_width => updateResolution({ custom_width })); const heightField = dimensionField("HEIGHT", settings.custom_height, custom_height => updateResolution({ custom_height })); dimensions.append(widthField, heightField); resolutionPanel.append(dimensions); } }
     disableWhenExternal();
-    const readout = document.createElement("span"); readout.style.cssText = "margin-left:auto;font-size:11px;color:#7ee19d;white-space:nowrap"; readout.textContent = externalCanvas ? "External width/height overwrite · Director sizing and input scaling disabled" : `${settings.aspect === "auto" ? "Auto 768px" : settings.aspect} · ${settings.resolution === "auto" ? "Auto 768px" : settings.resolution} · ${currentCanvas[0]} × ${currentCanvas[1]} · 32px H3 grid`; resolutionPanel.append(readout); timeline.append(resolutionPanel);
+    const readout = document.createElement("span"); readout.style.cssText = "margin-left:auto;font-size:11px;color:#7ee19d;white-space:nowrap"; readout.textContent = externalCanvas ? "External width/height overwrite · Director sizing and input scaling disabled" : `${settings.aspect === "auto" ? "Auto 768px" : settings.aspect} · ${settings.resolution === "auto" ? "Auto 768px" : settings.resolution} · ${currentCanvas[0]} × ${currentCanvas[1]} · 32px H3 grid`; resolutionPanel.append(readout); modeGroup.append(resolutionPanel); modeGroup.append(postprocessPanel); modeGroup.append(optimizationPanel);
 
     const lengthWidget = node.widgets?.find(w => w.name === "duration"); const timelineSeconds = Math.max(1, Number(lengthWidget?.value) || 5); lastTimelineLength = timelineSeconds;
 
@@ -894,6 +1126,10 @@ function install(node) {
   node.onResize = function (...args) { oldResize?.apply(this, args); syncNodeBounds(); };
   const restorePersistedState = () => {
     state = parseState(dataWidget.value);
+    state.postprocess_recipe = Array.isArray(state.postprocess_recipe) ? state.postprocess_recipe : DEFAULT_POSTPROCESS_RECIPE;
+    state.internal_execution = { sampler: "res_multistep", scheduler: "simple", steps: 25, shift_video: 11, shift_audio: 4, comfy_kitchen_attention: false, cache: { enabled: false, reuse_threshold: 0.05, start_percent: 0.15, end_percent: 0.90, max_steps: 2, device: "auto", verbose: false }, ...(state.internal_execution && typeof state.internal_execution === "object" ? state.internal_execution : {}) };
+    state.internal_execution.cache = { enabled: false, reuse_threshold: 0.05, start_percent: 0.15, end_percent: 0.90, max_steps: 2, device: "auto", verbose: false, ...(state.internal_execution.cache && typeof state.internal_execution.cache === "object" ? state.internal_execution.cache : {}) };
+    state.internal_execution.save = { output_kind: "image", filename_prefix: "DaSiWa_MiniMaxH3_%date:yyyyMMdd%_%seed%", file_format: "png", compression: 0, save_output: true, save_workflow: true, codec: "Auto", container: "Auto", bit_depth: "Auto", quality: 20, pingpong: false, crop_to_audio: false, audio_codec: "Auto", audio_bitrate: "192k", save_first_frame: false, save_last_frame: false, model_hash: "", text_positive: "", text_negative: "", text_steps: 0, text_cfg: 0, text_sampler: "", text_scheduler: "", text_seed: 0, text_model: "", ...(state.internal_execution.save || {}) };
     mediaPromptHeight = Math.max(90, Number(state.media_prompt_height) || 120);
     globalPromptHeight = Math.max(90, Number(state.global_prompt_height) || 120);
     selectedId = null;

@@ -16,6 +16,7 @@ if __package__:
     from .nodes.nodes_minimax_h3_cache import MiniMaxH3Cache
 
     from .nodes import nodes_system_monitor
+    from .nodes import input_images  # registers /dasiwa/input-images route
     from .nodes.helper_logging import log_startup_summary
 
     NODE_CLASS_MAPPINGS = {

@@ -19,10 +19,18 @@ def test_director_controls_have_single_owners_and_image_inpaint_can_start_empty(
     assert 'openStageSettings' in src
     assert 'save_workflow' in src
     # Model/prompt controls share panel one; save settings are never nested there.
-    assert 'topRow.append(modesSide, promptSide, actionsSide, spacer, docsButton)' in src
+    assert 'topRow.append(modesSide, actionsSide, docsButton)' in src
+    assert 'promptRow.append(promptSide)' in src
+    assert 'modeGroup.append(promptRow)' in src
     assert 'promptSettingsPanel' not in src
     assert 'Save Settings' not in src
-    assert 'controlRow.append(modeGroup, postprocessPanel, saveNodePanel)' in src
+    assert 'controlRow.append(modeGroup, saveNodePanel)' in src
+    # The post-process options render as a 5th row of pills inside the mode group.
+    assert 'modeGroup.append(postprocessPanel)' in src
+    assert 'PP_STAGE_FIELDS' in src
+    assert 'modelFolder' in src
+    assert 'ppLoadModelList' in src
+    assert 'ds-h3-pp-burger' in src
     # The legacy internal-execute input is intentionally invisible.
     assert 'const internalExecuteWidget = node.widgets?.find(w => w.name === "internal_execute")' in src
     assert 'internalExecuteWidget.hidden = true' in src
