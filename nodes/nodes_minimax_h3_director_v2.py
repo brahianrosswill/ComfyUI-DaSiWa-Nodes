@@ -60,8 +60,6 @@ class MiniMaxH3DirectorV2:
                 "clip": ("CLIP",),
                 "vae": ("VAE",),
                 "audio_vae": ("VAE",),
-                "fl2va_clip": ("CLIP", {"forceInput": True}),
-                "ref2va_clip": ("CLIP", {"forceInput": True}),
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff, "forceInput": True}),
             },
             "hidden": {"prompt_context": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
@@ -76,10 +74,6 @@ class MiniMaxH3DirectorV2:
     @staticmethod
     def select_execution_model(mode, fl2va_model, ref2va_model):
         return ref2va_model if mode == "REF2VA" else fl2va_model
-
-    @staticmethod
-    def select_execution_clip(mode, clip, fl2va_clip=None, ref2va_clip=None):
-        return (ref2va_clip if mode == "REF2VA" else fl2va_clip) or clip
 
     def check_lazy_status(self, mode, prompt, width, height, duration, ref_image_size, timeline_data, builder_state,
                           fl2va_model=None, ref2va_model=None, external_width_overwrite=None,
@@ -290,14 +284,14 @@ class MiniMaxH3DirectorV2:
                 fl2va_model=None, ref2va_model=None, external_width_overwrite=None,
                 external_height_overwrite=None, external_prompt_overwrite=None, frame_rate=24.0,
                 internal_execute=False, clip=None, vae=None, seed=0, prompt_context=None, extra_pnginfo=None,
-                audio_vae=None, fl2va_clip=None, ref2va_clip=None):
+                audio_vae=None):
         model = self.select_execution_model(mode, fl2va_model, ref2va_model)
-        execution_clip = self.select_execution_clip(mode, clip, fl2va_clip, ref2va_clip)
+        execution_clip = clip
         if model is None:
             wanted = "ref2va_model" if mode == "REF2VA" else "fl2va_model"
             raise ValueError(f"MiniMax H3 Director 2.0 requires {wanted}")
         if execution_clip is None or vae is None:
-            raise ValueError("MiniMax H3 Director 2.0 requires clip (or the selected mode's LoRA-patched clip) and vae")
+            raise ValueError("MiniMax H3 Director 2.0 requires clip and vae")
         guide_result = self.build_guide(
             mode, prompt, width, height, duration, ref_image_size, timeline_data, builder_state,
             fl2va_model, ref2va_model, external_width_overwrite, external_height_overwrite,
