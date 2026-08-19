@@ -14,6 +14,7 @@ if __package__:
     from .nodes.nodes_minimax_h3_director import MiniMaxH3Director
     from .nodes.nodes_minimax_h3_director_guide import MiniMaxH3DirectorGuide
     from .nodes.nodes_minimax_h3_cache import MiniMaxH3Cache
+
     from .nodes import nodes_system_monitor
     from .nodes.helper_logging import log_startup_summary
 
@@ -39,6 +40,7 @@ if __package__:
         "MiniMaxH3Director": MiniMaxH3Director,
         "MiniMaxH3DirectorGuide": MiniMaxH3DirectorGuide,
         "MiniMaxH3Cache": MiniMaxH3Cache,
+
     }
 
     NODE_DISPLAY_NAME_MAPPINGS = {
@@ -63,6 +65,7 @@ if __package__:
         "MiniMaxH3Director": "MiniMax H3 Director",
         "MiniMaxH3DirectorGuide": "MiniMax H3 Director Guide",
         "MiniMaxH3Cache": "MiniMax H3 Cache",
+
     }
     log_startup_summary(len(NODE_CLASS_MAPPINGS))
 else:

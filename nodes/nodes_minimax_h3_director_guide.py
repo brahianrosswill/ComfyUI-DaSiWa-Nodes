@@ -52,16 +52,17 @@ class MiniMaxH3DirectorGuide:
 
     def apply(self, clip, vae, guide, audio_vae=None):
         state = normalize_guide(guide)
-        if state.mode in {"T2VA", "I2VA", "FL2VA", "L2VA"}:
+        if state.mode in {"T2VA", "I2VA", "FL2VA", "L2VA", "Image Inpaint"}:
             native = _native_node("MiniMaxH3ImageToVideo")
+            native_length = 5 if state.mode == "Image Inpaint" else state.length
             log_dasiwa(
                 "MiniMax H3 Director Guide",
-                f"mode=FL2VA; upstream=MiniMaxH3ImageToVideo; clip={type(clip).__name__}; "
-                f"vae={type(vae).__name__}; audio_vae=not-used; frames={state.length}; "
+                f"mode={state.mode}; upstream=MiniMaxH3ImageToVideo; clip={type(clip).__name__}; "
+                f"vae={type(vae).__name__}; audio_vae=not-used; frames={native_length}; "
                 f"first_frame={state.first_frame is not None}; last_frame={state.last_frame is not None}",
             )
             positive, latent = native.execute(
-                clip, vae, state.resolved_prompt, state.width, state.height, state.length,
+                clip, vae, state.resolved_prompt, state.width, state.height, native_length,
                 state.first_frame, state.last_frame,
             )
             log_dasiwa(
