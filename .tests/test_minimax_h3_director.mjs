@@ -69,6 +69,8 @@ assert.match(source, /settings\.resolution === "custom" && settings\.custom_mode
 assert.match(source, /options\.forEach\([\s\S]*?select\.value = value; select\.oninput/, "resolution selects must set their value after options exist and react on input");
 assert.match(source, /Auto aspect" : settings\.aspect\} · \$\{settings\.resolution === "auto" \? "Auto 768px" : settings\.resolution\}/, "the readout must identify the actual selected aspect and resolution");
 assert.match(source, /INPUT SCALING/, "the resolution panel must expose the third input-scaling dropdown");
+assert.match(source, /ds-h3-seed-control/, "the resolution row must render the separated seed control");
+assert.match(source, /External seed connected/, "a connected seed input must take precedence over the Director seed control");
 assert.match(source, /input_scaling: "Auto"/, "input scaling must default to Auto alongside Aspect and Resolution");
 assert.match(source, /\["Off", "Off"\], \["Auto", "Auto · short edge 2048 px"\], \["Target", "Target · Selected Aspect & Resolution"\], \["Fit", "Fit"\]/, "input scaling must expose the reused Torch Resize behaviours");
 assert.match(source, /external_width_overwrite/, "the Director frontend must recognize the external width overwrite input");

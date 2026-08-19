@@ -11,7 +11,7 @@ const TASK_TYPES_JS = ["keyframe completion","reference generation","video editi
 const VISUAL_MARKERS_JS = ["fully_preserved","partially_preserved","attribute_transfer","weak_reference"];
 const AUDIO_MARKERS_JS = ["fully_copy","partially_copy","reference","weak_reference"];
 const ALL_MARKERS_JS = [...new Set([...VISUAL_MARKERS_JS,...AUDIO_MARKERS_JS])];
-const DEFAULT_STATE = { version: 1, items: [], prompt_blocks: [], builder_state: null, resolution: null };
+const DEFAULT_STATE = { version: 1, items: [], prompt_blocks: [], builder_state: null, resolution: null, seed_control: { mode: "random", last_seed: null, recent: [] } };
 const MAX = { image: 9, video: 3, audio: 3, total: 12 };
 // H3's VAE emits 16px latent cells and the diffusion transformer patchifies
 // them in 2×2 groups, so both canvas edges must be divisible by 32.
@@ -87,8 +87,8 @@ const PP_STAGE_FIELDS = {
 // Saver option specs (image / video) for the save-node gear, same field-list format.
 const PP_IMAGE_SAVE_FIELDS = [
   { key: "filename_prefix", type: "text", default: "Director" },
-  { key: "file_format", type: "combo", options: ["webp", "png"], default: "png" },
-  { key: "compression", type: "number", min: 0, max: 100, step: 1, default: 0 },
+  { key: "file_format", type: "combo", options: ["webp", "png"], default: "webp" },
+  { key: "compression", type: "number", min: 0, max: 100, step: 1, default: 15 },
 ];
 const PP_VIDEO_SAVE_FIELDS = [
   { key: "filename_prefix", type: "text", default: "Director/video" },
@@ -322,9 +322,12 @@ function install(node) {
   let state = parseState(dataWidget.value);
   const DEFAULT_POSTPROCESS_RECIPE = [{ id: "frame_interpolation", enabled: false, factor: 2, model: "rife_v4.26.safetensors" }, { id: "torch_resize", enabled: false, size_mode: "Multiplier", scale_multiplier: 2, interpolation: "Lanczos" }, { id: "model_upscale", enabled: false, model_name: "2x-AnimeSharpV4_RCAN.safetensors" }, { id: "rtx_refiner", enabled: false, upscale: "VSR", upscale_quality: "Ultra" }, { id: "watermark", enabled: false, watermark_path: "", position: "bottom-right" }];
   state.postprocess_recipe = Array.isArray(state.postprocess_recipe) ? state.postprocess_recipe : DEFAULT_POSTPROCESS_RECIPE;
+  state.seed_control = { mode: "random", last_seed: null, recent: [], ...(state.seed_control && typeof state.seed_control === "object" ? state.seed_control : {}) };
+  state.seed_control.mode = state.seed_control.mode === "fixed" ? "fixed" : "random";
+  state.seed_control.recent = Array.isArray(state.seed_control.recent) ? state.seed_control.recent.map(String).filter(value => /^\d+$/.test(value)).slice(0, 10) : [];
   state.internal_execution = { sampler: "res_multistep", scheduler: "simple", steps: 25, shift_video: 11, shift_audio: 4, comfy_kitchen_attention: false, cache: { enabled: false, reuse_threshold: 0.05, start_percent: 0.15, end_percent: 0.90, max_steps: 2, device: "auto", verbose: false }, ...(state.internal_execution && typeof state.internal_execution === "object" ? state.internal_execution : {}) };
   state.internal_execution.cache = { enabled: false, reuse_threshold: 0.05, start_percent: 0.15, end_percent: 0.90, max_steps: 2, device: "auto", verbose: false, ...(state.internal_execution.cache && typeof state.internal_execution.cache === "object" ? state.internal_execution.cache : {}) };
-  state.internal_execution.save = { output_kind: "image", filename_prefix: "DaSiWa_MiniMaxH3_%date:yyyyMMdd%_%seed%", file_format: "png", compression: 0, save_output: true, save_workflow: true, codec: "Auto", container: "Auto", bit_depth: "Auto", quality: 20, pingpong: false, crop_to_audio: false, audio_codec: "Auto", audio_bitrate: "192k", save_first_frame: false, save_last_frame: false, model_hash: "", text_positive: "", text_negative: "", text_steps: 0, text_cfg: 0, text_sampler: "", text_scheduler: "", text_seed: 0, text_model: "", ...(state.internal_execution.save || {}) };
+  state.internal_execution.save = { output_kind: "image", filename_prefix: "DaSiWa_MiniMaxH3_%date:yyyyMMdd%_%seed%", file_format: "webp", compression: 15, save_output: true, save_workflow: true, codec: "Auto", container: "Auto", bit_depth: "Auto", quality: 20, pingpong: false, crop_to_audio: false, audio_codec: "Auto", audio_bitrate: "192k", save_first_frame: false, save_last_frame: false, model_hash: "", text_positive: "", text_negative: "", text_steps: 0, text_cfg: 0, text_sampler: "", text_scheduler: "", text_seed: 0, text_model: "", ...(state.internal_execution.save || {}) };
   let selectedModeOverride = null;
   const mode = () => selectedModeOverride ?? (node.widgets?.find(w => w.name === "mode")?.value || "FL2VA");
   let builderState = state.builder_state && typeof state.builder_state === "object" ? { ...DEFAULT_BUILDER_STATE(mode()), ...state.builder_state, ref: { ...DEFAULT_BUILDER_STATE(mode()).ref, ...(state.builder_state.ref || {}) } } : DEFAULT_BUILDER_STATE(mode());
@@ -367,6 +370,9 @@ function install(node) {
   const externalPromptInput = () => node.inputs?.find(i => i.name === "external_prompt_overwrite");
   const externalCanvasInput = name => node.inputs?.find(i => i.name === name);
   const hasExternalCanvas = () => externalCanvasInput("external_width_overwrite")?.link != null && externalCanvasInput("external_height_overwrite")?.link != null;
+  const seedWidget = () => node.widgets?.find(w => w.name === "seed");
+  if (!seedWidget()) { const widget = node.addWidget("number", "seed", 0, null, { min: 0, max: 0xffffffffffffffff, step: 1 }); widget.hidden = true; widget.draw = () => {}; widget.computeSize = () => [0, -4]; }
+  const hasExternalSeed = () => node.inputs?.find(i => i.name === "seed")?.link != null;
   const hasExternalPrompt = () => {
     if (externalPromptInput()?.link != null) return true;
     const w = externalPromptWidget();
@@ -374,6 +380,7 @@ function install(node) {
   };
   let lastExternalPromptLinked = hasExternalPrompt();
   let lastExternalCanvasLinked = hasExternalCanvas();
+  let lastExternalSeedLinked = hasExternalSeed();
   const status = document.createElement("div"); status.className = "ds-h3-status ds-h3-info-field"; status.textContent = ""; status.style.display = "none";
 
   const timeline = document.createElement("div"); timeline.className = "ds-h3 ds-h3-root"; timeline.tabIndex = 0;
@@ -942,7 +949,7 @@ function install(node) {
           ensureValue(fspec);
           const value = target[fspec.key];
           const field = document.createElement("label"); field.style.cssText = "display:flex;flex-direction:column;gap:3px;margin:7px 0;font-size:11px";
-          const title = document.createElement("span"); title.textContent = fspec.key.replaceAll("_", " "); title.style.cssText = "color:#8fb3d6"; field.append(title);
+          const title = document.createElement("span"); title.textContent = fspec.key.replaceAll("_", " "); title.style.cssText = "color:#8fb3d6"; if (fspec.type !== "boolean") field.append(title);
           if (fspec.type === "imagePicker") {
             ppImagePicker(field, fspec.key, target, inputStyle, String(target[fspec.key] || ""));
             body.append(field);
@@ -963,7 +970,7 @@ function install(node) {
             const select = makeCombo(fspec, fspec.options, value); select.onchange = () => { target[fspec.key] = select.value; }; field.append(select);
             body.append(field);
           } else if (fspec.type === "boolean") {
-            const input = document.createElement("input"); input.type = "checkbox"; input.checked = Boolean(value); input.onchange = () => { target[fspec.key] = input.checked; }; field.append(input);
+            field.style.cssText = "display:flex;flex-direction:row;align-items:center;gap:6px;margin:7px 0;font-size:11px"; const input = document.createElement("input"); input.type = "checkbox"; input.checked = Boolean(value); input.onchange = () => { target[fspec.key] = input.checked; }; field.append(input, title);
             body.append(field);
           } else {
             const input = document.createElement("input"); input.type = fspec.type === "number" ? "number" : "text"; input.value = String(value ?? "");
@@ -1008,21 +1015,22 @@ function install(node) {
       const exec = state.internal_execution; exec.cache = exec.cache && typeof exec.cache === "object" ? exec.cache : { enabled: false, reuse_threshold: 0.05, start_percent: 0.15, end_percent: 0.90, max_steps: 2, device: "auto", verbose: false };
       optimizationPanel = document.createElement("div"); optimizationPanel.className = "ds-h3-optimization-row"; optimizationPanel.style.cssText = "width:100%;box-sizing:border-box;display:flex;flex-wrap:wrap;align-items:center;gap:5px;padding:4px 0 0;border-top:1px solid #344452;margin-top:2px";
       const optimizationTitle = document.createElement("span"); optimizationTitle.textContent = "Optimizations:"; optimizationTitle.style.cssText = "font-size:11px;color:#9fb3c2;font-weight:600;margin-right:2px"; optimizationPanel.append(optimizationTitle);
-      const makeOptPill = (label, active, onToggle, onSettings) => { const pill = document.createElement("div"); pill.className = "ds-h3-pp-btn"; pill.setAttribute("role", "button"); pill.setAttribute("tabindex", "0"); pill.classList.toggle("active", active); pill.title = `Toggle ${label}`; pill.append(document.createTextNode(label)); const state = document.createElement("span"); state.textContent = active ? "on" : "off"; state.style.cssText = "margin-left:auto;font-size:10px;font-weight:600;min-width:18px;text-align:right;"; state.style.color = active ? "#7ee19d" : "#4a5c6a"; pill.append(state); const toggleOpt = () => { onToggle(); emit(); render(); }; pill.onclick = (event) => { if (event.target.closest(".ds-h3-pp-burger")) return; toggleOpt(); }; pill.onkeydown = (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); if (event.target.closest(".ds-h3-pp-burger")) return; toggleOpt(); } }; const burger = document.createElement("button"); burger.type = "button"; burger.className = "ds-h3-pp-burger"; burger.textContent = "☰"; burger.title = `Configure ${label}`; burger.onclick = (event) => { event.stopPropagation(); onSettings(); }; pill.append(burger); optimizationPanel.append(pill); };
-      makeOptPill("Comfy Kitchen Attention", Boolean(exec.comfy_kitchen_attention), () => { exec.comfy_kitchen_attention = !exec.comfy_kitchen_attention; }, () => { setStatus("Comfy Kitchen attention: toggles ComfyUI's INT8 kernel for MiniMax H3 at runtime; no tuning options."); });
+      const makeOptPill = (label, active, onToggle, onSettings) => { const pill = document.createElement("div"); pill.className = "ds-h3-pp-btn"; pill.setAttribute("role", "button"); pill.setAttribute("tabindex", "0"); pill.classList.toggle("active", active); pill.title = `Toggle ${label}`; pill.append(document.createTextNode(label)); const toggleOpt = () => { onToggle(); emit(); render(); }; pill.onclick = (event) => { if (event.target.closest(".ds-h3-pp-burger")) return; toggleOpt(); }; pill.onkeydown = (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); if (event.target.closest(".ds-h3-pp-burger")) return; toggleOpt(); } }; if (onSettings) { const burger = document.createElement("button"); burger.type = "button"; burger.className = "ds-h3-pp-burger"; burger.textContent = "☰"; burger.title = `Configure ${label}`; burger.onclick = (event) => { event.stopPropagation(); onSettings(); }; pill.append(burger); } optimizationPanel.append(pill); };
+      makeOptPill("Comfy Kitchen Attention", Boolean(exec.comfy_kitchen_attention), () => { exec.comfy_kitchen_attention = !exec.comfy_kitchen_attention; }, null);
       makeOptPill("MiniMax H3 Cache", Boolean(exec.cache.enabled), () => { exec.cache.enabled = !exec.cache.enabled; }, () => { openStageSettings("MiniMax H3 Cache", exec.cache, PP_H3_CACHE_FIELDS); });
       const saveSettings = state.internal_execution.save;
       const outputKind = mode() === "Image Inpaint" ? "image" : "video";
       saveSettings.output_kind = outputKind;
-      const saveTitle = document.createElement("strong"); saveTitle.textContent = "Save node"; saveTitle.style.cssText = "font-size:12px;color:#d5e6f2";
-      const saveMode = document.createElement("span"); saveMode.textContent = `${mode()} · always available`; saveMode.style.cssText = "font-size:11px;color:#9fb3c2";
+      const saveTitle = document.createElement("strong"); saveTitle.textContent = "Preview & Output"; saveTitle.style.cssText = "font-size:12px;color:#d5e6f2";
+      const outputSettingsHint = () => { const flag = value => value ? "on" : "off"; const parts = [`prefix ${saveSettings.filename_prefix || "Director"}`, `save ${flag(saveSettings.save_output !== false)}`, `workflow ${flag(saveSettings.save_workflow !== false)}`]; if (outputKind === "image") parts.push(String(saveSettings.file_format || "webp").toUpperCase(), `compression ${saveSettings.compression ?? 15}`); else parts.push(saveSettings.codec || "Auto", saveSettings.container || "Auto", saveSettings.bit_depth || "Auto", `quality ${saveSettings.quality ?? 20}`, `pingpong ${flag(saveSettings.pingpong)}`, `crop to audio ${flag(saveSettings.crop_to_audio)}`, `${saveSettings.audio_codec || "Auto"} ${saveSettings.audio_bitrate || "192k"}`, `first frame ${flag(saveSettings.save_first_frame)}`, `last frame ${flag(saveSettings.save_last_frame)}`); return parts.join(" · "); };
+      const saveHint = document.createElement("span"); saveHint.textContent = outputSettingsHint(); saveHint.style.cssText = "font-size:11px;line-height:1.35;color:#7ee19d;overflow-wrap:anywhere";
       const saveOutput = document.createElement("label"); saveOutput.style.cssText = "display:flex;gap:6px;align-items:center;font-size:11px;color:#c8d7e3"; const saveOutputToggle = document.createElement("input"); saveOutputToggle.type = "checkbox"; saveOutputToggle.checked = saveSettings.save_output !== false; saveOutputToggle.onchange = () => { saveSettings.save_output = saveOutputToggle.checked; emit(); }; saveOutput.append(saveOutputToggle, document.createTextNode("Save output"));
       const saveWorkflow = document.createElement("label"); saveWorkflow.style.cssText = "display:flex;gap:6px;align-items:center;font-size:11px;color:#c8d7e3"; const saveWorkflowToggle = document.createElement("input"); saveWorkflowToggle.type = "checkbox"; saveWorkflowToggle.checked = saveSettings.save_workflow !== false; saveWorkflowToggle.onchange = () => { saveSettings.save_workflow = saveWorkflowToggle.checked; emit(); }; saveWorkflow.append(saveWorkflowToggle, document.createTextNode("Embed workflow"));
       const saveGear = document.createElement("button"); saveGear.textContent = "⚙"; saveGear.title = "Configure every setting of the internally-used metadata image saver"; saveGear.onclick = () => openStageSettings("Save node", saveSettings, outputKind === "image" ? PP_IMAGE_SAVE_FIELDS : PP_VIDEO_SAVE_FIELDS);
       const savedPreview = node.__dasiwaH3SavedPreview;
       const previewFrame = document.createElement("div"); previewFrame.className = "ds-h3-save-preview"; previewFrame.style.cssText = "min-height:96px;display:grid;place-items:center;background:#080d11;border:1px solid #2d4658;border-radius:4px;overflow:hidden";
       if (savedPreview?.filename) { const isVideo = String(savedPreview.format || "").startsWith("video/") || savedPreview.container; const media = document.createElement(isVideo ? "video" : "img"); media.src = savedViewUrl(savedPreview); media.title = "Latest Director output"; media.style.cssText = "display:block;width:100%;max-height:180px;object-fit:contain;background:#000;cursor:pointer"; if (isVideo) { media.controls = true; media.muted = true; media.loop = true; media.playsInline = true; } else { media.alt = savedPreview.filename; } media.onclick = () => window.open(media.src, "_blank", "noopener,noreferrer"); previewFrame.append(media); } else { const empty = document.createElement("span"); empty.textContent = "Preview appears after the Director publishes an image or video"; empty.style.cssText = "padding:8px;text-align:center;font-size:11px;color:#9fb3c2"; previewFrame.append(empty); }
-      saveNodePanel.append(saveTitle, saveMode, previewFrame, saveOutput, saveWorkflow, saveGear);
+      saveNodePanel.append(saveTitle, saveHint, previewFrame, saveOutput, saveWorkflow, saveGear);
       controlRow.append(modeGroup, saveNodePanel);
       timeline.append(controlRow);
     }
@@ -1055,6 +1063,23 @@ function install(node) {
       { title: "MP", items: resNames.filter(n => /MP/.test(n)).sort((a, b) => mpVal(a) - mpVal(b)).map(n => [n, n]) },
     ]);
     addDropdown("INPUT SCALING", settings.input_scaling, [["Off", "Off"], ["Auto", "Native (ShortEdge 2048px)"], ["Target", "Target · Selected Aspect & Resolution"], ["Fit", "Fit"], ["Fill and crop", "Fill and crop"], ["Fit and pad", "Fit and pad"], ["Long side with divisible crop", "Long side with divisible crop"]], input_scaling => updateResolution({ input_scaling }), false, true);
+    const seedControl = document.createElement("div"); seedControl.className = "ds-h3-seed-control"; seedControl.style.cssText = "display:flex;align-items:flex-end;gap:5px;margin-left:8px;padding-left:10px;border-left:1px solid #344452";
+    const externalSeed = hasExternalSeed();
+    if (externalSeed) { const external = document.createElement("span"); external.textContent = "External seed connected"; external.style.cssText = "font-size:11px;color:#9fb3c2;white-space:nowrap;padding-bottom:4px"; seedControl.append(external); } else {
+      const seed = seedWidget(); const controlState = state.seed_control = { mode: "random", last_seed: null, recent: [], ...(state.seed_control || {}) }; const maxSeed = 0xffffffffffffffffn;
+      const setSeed = raw => { let value; try { value = BigInt(String(raw).trim()); } catch { return false; } if (value < 0n || value > maxSeed) return false; const text = value.toString(); if (seed) { seed.value = text; seed.callback?.(text); } node.setDirtyCanvas?.(true, true); return text; };
+      const currentSeed = () => String(seed?.value ?? 0); if (controlState.mode === "random" && currentSeed() === "0") { const words = crypto.getRandomValues(new Uint32Array(2)); setSeed((BigInt(words[0]) << 32n) | BigInt(words[1])); } const remember = value => { controlState.last_seed = value; controlState.recent = [value, ...controlState.recent.filter(entry => entry !== value)].slice(0, 10); };
+      const toggle = document.createElement("div"); toggle.style.cssText = "display:flex;gap:2px";
+      for (const modeName of [["random", "Random"], ["fixed", "Fixed"]]) { const button = document.createElement("button"); button.type = "button"; button.className = "ds-h3-res-btn"; button.textContent = modeName[1]; button.style.cssText = `width:58px;padding:3px 0;justify-content:center;gap:0;text-align:center;${controlState.mode === modeName[0] ? "border-color:#7ee19d;color:#7ee19d" : ""}`; button.onclick = () => { controlState.mode = modeName[0]; emit(); render(); }; toggle.append(button); }
+      const seedField = document.createElement("label"); seedField.style.cssText = "display:flex;flex-direction:column;gap:3px;min-width:150px;font-size:10px;font-weight:600;letter-spacing:.4px;color:#8fb3d6;text-transform:uppercase"; seedField.textContent = "SEED";
+      const input = document.createElement("input"); input.type = "text"; input.inputMode = "numeric"; input.className = "ds-h3-res-num"; input.style.textAlign = "center"; input.value = currentSeed(); input.title = "Unsigned 64-bit Director seed";
+      input.onchange = event => { if (!setSeed(event.target.value)) event.target.value = currentSeed(); else { event.target.value = currentSeed(); emit(); } }; seedField.append(input);
+      const roll = document.createElement("button"); roll.type = "button"; roll.className = "ds-h3-res-btn"; roll.textContent = "New"; roll.title = "Roll a new seed and retain the selected mode"; roll.style.cssText = "width:68px;padding:3px 0;justify-content:center;gap:0;text-align:center;white-space:nowrap"; roll.onclick = () => { const words = crypto.getRandomValues(new Uint32Array(2)); const value = ((BigInt(words[0]) << 32n) | BigInt(words[1])).toString(); setSeed(value); remember(value); emit(); render(); };
+      const last = document.createElement("button"); last.type = "button"; last.className = "ds-h3-res-btn"; last.textContent = "Use Last"; last.disabled = !controlState.last_seed; last.style.cssText = "width:68px;padding:3px 0;justify-content:center;gap:0;text-align:center;white-space:nowrap"; last.onclick = () => { if (setSeed(controlState.last_seed)) { controlState.mode = "fixed"; emit(); render(); } };
+      const history = document.createElement("details"); history.style.cssText = "position:relative"; const summary = document.createElement("summary"); summary.className = "ds-h3-res-btn"; summary.textContent = "Last 10 seeds"; summary.style.cssText = "padding:3px 6px;justify-content:center;gap:0;text-align:center;white-space:nowrap;cursor:pointer"; history.append(summary); const list = document.createElement("div"); list.style.cssText = "position:absolute;z-index:10;right:0;top:24px;min-width:160px;max-height:180px;overflow:auto;padding:5px;background:#111b23;border:1px solid #344452;border-radius:4px"; for (const value of controlState.recent) { const row = document.createElement("div"); row.style.cssText = "display:flex;gap:4px;align-items:center"; const item = document.createElement("button"); item.type = "button"; item.textContent = value; item.style.cssText = "flex:1;padding:3px 5px;border:0;background:transparent;color:#d5e6f2;text-align:right;cursor:pointer"; item.onclick = () => { if (setSeed(value)) { controlState.mode = "fixed"; emit(); render(); } }; const copy = document.createElement("button"); copy.type = "button"; copy.textContent = "Copy"; copy.title = "Copy seed"; copy.style.cssText = "padding:2px 5px;font-size:10px"; copy.onclick = event => { event.stopPropagation(); navigator.clipboard.writeText(value).then(() => { copy.textContent = "✓"; setTimeout(() => { copy.textContent = "Copy"; }, 900); }); }; row.append(item, copy); list.append(row); } if (!controlState.recent.length) list.textContent = "No previous seeds"; history.append(list);
+      seedControl.append(seedField, toggle, roll, last, history);
+    }
+    resolutionPanel.append(seedControl);
     if (settings.aspect === "custom") { for (const [name, key] of [["W", "custom_aspect_w"], ["H", "custom_aspect_h"]]) { const field = document.createElement("label"); field.style.cssText = "display:flex;flex-direction:column;gap:3px;font-size:10px;color:#9fb3c2;width:56px"; field.textContent = `RATIO ${name}`; const input = document.createElement("input"); input.type = "number"; input.min = "1"; input.step = "1"; input.className = "ds-h3-res-num"; input.value = settings[key]; input.onchange = event => updateResolution({ [key]: Math.max(1, Number(event.target.value) || 1) }); field.append(input); resolutionPanel.append(field); } }
     if (settings.resolution === "custom") { addDropdown("CUSTOM", settings.custom_mode || "mp", [["mp", "Megapixels"], ["fixed", "Fixed pixels"]], custom_mode => updateResolution({ custom_mode })); const customKey = (settings.custom_mode || "mp") === "mp" ? "custom_mp" : "custom_width"; if (customKey === "custom_mp") { const field = document.createElement("label"); field.style.cssText = "display:flex;flex-direction:column;gap:3px;font-size:10px;color:#9fb3c2;width:76px"; field.textContent = "MP"; const input = document.createElement("input"); input.type = "number"; input.min = ".01"; input.step = ".01"; input.className = "ds-h3-res-num"; input.value = settings.custom_mp; input.onchange = event => updateResolution({ custom_mp: Number(event.target.value) || settings.custom_mp }); field.append(input); resolutionPanel.append(field); } else { const dimensions = document.createElement("div"); dimensions.className = "ds-h3-fixed-dimensions"; dimensions.style.cssText = "display:flex;gap:6px;align-items:end"; const dimensionField = (label, value, onChange) => { const field = document.createElement("label"); field.style.cssText = "display:flex;flex-direction:column;gap:3px;font-size:10px;color:#9fb3c2;width:76px"; field.textContent = label; const input = document.createElement("input"); input.type = "number"; input.min = "16"; input.step = "16"; input.className = "ds-h3-res-num"; input.value = value; input.onchange = event => onChange(Number(event.target.value) || value); field.append(input); return field; }; const widthField = dimensionField("WIDTH", settings.custom_width, custom_width => updateResolution({ custom_width })); const heightField = dimensionField("HEIGHT", settings.custom_height, custom_height => updateResolution({ custom_height })); dimensions.append(widthField, heightField); resolutionPanel.append(dimensions); } }
     disableWhenExternal();
@@ -1128,7 +1153,7 @@ function install(node) {
     state.postprocess_recipe = Array.isArray(state.postprocess_recipe) ? state.postprocess_recipe : DEFAULT_POSTPROCESS_RECIPE;
     state.internal_execution = { sampler: "res_multistep", scheduler: "simple", steps: 25, shift_video: 11, shift_audio: 4, comfy_kitchen_attention: false, cache: { enabled: false, reuse_threshold: 0.05, start_percent: 0.15, end_percent: 0.90, max_steps: 2, device: "auto", verbose: false }, ...(state.internal_execution && typeof state.internal_execution === "object" ? state.internal_execution : {}) };
     state.internal_execution.cache = { enabled: false, reuse_threshold: 0.05, start_percent: 0.15, end_percent: 0.90, max_steps: 2, device: "auto", verbose: false, ...(state.internal_execution.cache && typeof state.internal_execution.cache === "object" ? state.internal_execution.cache : {}) };
-    state.internal_execution.save = { output_kind: "image", filename_prefix: "DaSiWa_MiniMaxH3_%date:yyyyMMdd%_%seed%", file_format: "png", compression: 0, save_output: true, save_workflow: true, codec: "Auto", container: "Auto", bit_depth: "Auto", quality: 20, pingpong: false, crop_to_audio: false, audio_codec: "Auto", audio_bitrate: "192k", save_first_frame: false, save_last_frame: false, model_hash: "", text_positive: "", text_negative: "", text_steps: 0, text_cfg: 0, text_sampler: "", text_scheduler: "", text_seed: 0, text_model: "", ...(state.internal_execution.save || {}) };
+    state.internal_execution.save = { output_kind: "image", filename_prefix: "DaSiWa_MiniMaxH3_%date:yyyyMMdd%_%seed%", file_format: "webp", compression: 15, save_output: true, save_workflow: true, codec: "Auto", container: "Auto", bit_depth: "Auto", quality: 20, pingpong: false, crop_to_audio: false, audio_codec: "Auto", audio_bitrate: "192k", save_first_frame: false, save_last_frame: false, model_hash: "", text_positive: "", text_negative: "", text_steps: 0, text_cfg: 0, text_sampler: "", text_scheduler: "", text_seed: 0, text_model: "", ...(state.internal_execution.save || {}) };
     mediaPromptHeight = Math.max(90, Number(state.media_prompt_height) || 120);
     globalPromptHeight = Math.max(90, Number(state.global_prompt_height) || 120);
     selectedId = null;
@@ -1180,6 +1205,11 @@ function install(node) {
       lastExternalCanvasLinked = externalCanvasLinked;
       requestAnimationFrame(render);
     }
+    const externalSeedLinked = hasExternalSeed();
+    if (externalSeedLinked !== lastExternalSeedLinked) {
+      lastExternalSeedLinked = externalSeedLinked;
+      requestAnimationFrame(render);
+    }
   };
   const oldOnExecuted = node.onExecuted;
   node.onExecuted = function (message) {
@@ -1193,6 +1223,7 @@ function install(node) {
   };
   node.__dasiwaH3RestorePersistedState = () => requestAnimationFrame(restorePersistedState);
   node.__dasiwaH3State = () => state; node.__dasiwaH3Render = render;
+  node.__dasiwaH3PrepareSeed = () => { if (hasExternalSeed() || state.seed_control?.mode !== "random") return; const words = crypto.getRandomValues(new Uint32Array(2)); const value = ((BigInt(words[0]) << 32n) | BigInt(words[1])).toString(); const widget = seedWidget(); if (widget) { widget.value = value; widget.callback?.(value); } state.seed_control.last_seed = value; state.seed_control.recent = [value, ...(state.seed_control.recent || []).filter(entry => entry !== value)].slice(0, 10); emit(); };
   if (modeWidget) { const old = modeWidget.callback; modeWidget.callback = value => { selectedModeOverride = value; old?.(value); render(); }; }
   const extWidget = externalPromptWidget();
   if (extWidget) { const old = extWidget.callback; extWidget.callback = value => { old?.(value); render(); }; }
@@ -1219,4 +1250,4 @@ function install(node) {
 
 }
 
-app.registerExtension({ name: "DaSiWa.MiniMaxH3Director", nodeCreated(node) { if (node.comfyClass === "MiniMaxH3Director") install(node); }, loadedGraphNode(node) { if (node.comfyClass === "MiniMaxH3Director") { install(node); node.__dasiwaH3RestorePersistedState?.(); } } });
+app.registerExtension({ name: "DaSiWa.MiniMaxH3Director", nodeCreated(node) { if (node.comfyClass === "MiniMaxH3Director") install(node); }, loadedGraphNode(node) { if (node.comfyClass === "MiniMaxH3Director") { install(node); node.__dasiwaH3RestorePersistedState?.(); } }, beforeQueued() { for (const node of app.graph?._nodes || []) node.__dasiwaH3PrepareSeed?.(); } });
