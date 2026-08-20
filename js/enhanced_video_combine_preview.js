@@ -250,6 +250,18 @@ app.registerExtension({
             };
             this.dasiwaVideoPreview = preview;
             this.dasiwaVideoPreviewWidget = previewWidget;
+            this.dasiwaFrameExportCheckboxes = { save_first_frame: saveFirstFrame, save_last_frame: saveLastFrame };
+            return result;
+        };
+
+        const originalOnConfigure = nodeType.prototype.onConfigure;
+        nodeType.prototype.onConfigure = function () {
+            const result = originalOnConfigure ? originalOnConfigure.apply(this, arguments) : undefined;
+            // widgets_values is applied after onNodeCreated built the checkboxes, so
+            // their initial `checked` snapshot predates the restored widget values.
+            for (const [name, checkbox] of Object.entries(this.dasiwaFrameExportCheckboxes ?? {})) {
+                checkbox.checked = Boolean(this.widgets?.find((widget) => widget.name === name)?.value);
+            }
             return result;
         };
 
