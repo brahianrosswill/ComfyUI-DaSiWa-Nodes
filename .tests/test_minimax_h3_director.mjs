@@ -82,6 +82,8 @@ assert.match(source, /ds-h3-fixed-dimensions/, "fixed custom resolution must gro
 assert.match(source, /display:flex;gap:6px/, "fixed custom resolution dimensions must use a horizontal flex layout");
 assert.match(source, /dimensionField\("WIDTH", settings\.custom_width/, "fixed custom resolution must label the width field");
 assert.match(source, /dimensionField\("HEIGHT", settings\.custom_height/, "fixed custom resolution must label the height field");
+assert.match(source, /state\.field_heights = \{ \.\.\.fieldHeights \};/, "resized prompt fields must persist their height in the serialized timeline state");
+assert.match(source, /const key = opts\.fieldKey \|\| "";/, "prompt fields must record resized heights under stable per-field keys");
 
 const moduleUrl = `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
 const { mediaTypeFor, wavDurationFromBuffer, REPOSITORY_URL, MINIMAX_MULTIPLE, ASPECT_OPTIONS, RESOLUTION_PRESETS } = await import(moduleUrl);
