@@ -287,10 +287,11 @@ function insertAtCursor(textarea, text) {
   textarea.dispatchEvent(new Event("change"));
 }
 
-function createBuilderField(label, value, opts = {}) {
+function createBuilderField(label, value, opts = {}, fieldHeights = {}) {
   const wrapper = document.createElement("div");
   wrapper.className = "ds-h3-prompt-field";
   wrapper.style.display = "flex"; wrapper.style.flexDirection = "column"; wrapper.style.gap = "2px"; wrapper.style.position = "relative";
+  const key = opts.fieldKey || "";
   if (opts.dataAttr) wrapper.dataset.ref2vaTarget = opts.dataAttr;
   if (label) { const lbl = document.createElement("div"); lbl.className = "ds-h3-small"; lbl.textContent = label; wrapper.appendChild(lbl); }
   const area = document.createElement(opts.tag || "textarea");
@@ -304,9 +305,13 @@ function createBuilderField(label, value, opts = {}) {
   resizer.className = "ds-h3-prompt-field-resizer";
   let dragging = false, startY = 0, startH = 0;
   resizer.addEventListener("pointerdown", ev => { dragging = true; startY = ev.clientY; startH = area.clientHeight; area.setPointerCapture(ev.pointerId); });
-  window.addEventListener("pointermove", ev => { if (!dragging) return; area.style.height = Math.max(60, startH + (ev.clientY - startY)) + "px"; });
+  window.addEventListener("pointermove", ev => { if (!dragging) return; const height = Math.max(60, startH + (ev.clientY - startY)); area.style.height = `${height}px`; if (key) fieldHeights[key] = height; });
   window.addEventListener("pointerup", () => { dragging = false; });
   wrapper.appendChild(resizer);
+  if (key) {
+    const saved = Number(fieldHeights[key]);
+    if (Number.isFinite(saved) && saved >= 60) area.style.height = `${saved}px`;
+  }
   return wrapper;
 }
 
@@ -320,6 +325,13 @@ function install(node) {
   dataWidget.hidden = true; dataWidget.options = { ...(dataWidget.options || {}), hidden: true };
   dataWidget.draw = () => {}; dataWidget.computeSize = () => [0, -4];
   let state = parseState(dataWidget.value);
+  // Resized prompt text-box heights, kept per node so a re-render (media add,
+  // mode/resolution change, workflow reload) restores the user's layout.
+  const fieldHeights = {};
+  for (const [key, value] of Object.entries(state.field_heights || {})) {
+    const height = Number(value);
+    if (Number.isFinite(height) && height >= 60) fieldHeights[key] = height;
+  }
   const DEFAULT_POSTPROCESS_RECIPE = [{ id: "frame_interpolation", enabled: false, factor: 2, model: "rife_v4.26.safetensors" }, { id: "torch_resize", enabled: false, size_mode: "Multiplier", scale_multiplier: 2, interpolation: "Lanczos" }, { id: "model_upscale", enabled: false, model_name: "2x-AnimeSharpV4_RCAN.safetensors" }, { id: "rtx_refiner", enabled: false, upscale: "VSR", upscale_quality: "Ultra" }, { id: "watermark", enabled: false, watermark_path: "", position: "bottom-right" }];
   state.postprocess_recipe = Array.isArray(state.postprocess_recipe) ? state.postprocess_recipe : DEFAULT_POSTPROCESS_RECIPE;
   state.seed_control = { mode: "random", last_seed: null, recent: [], ...(state.seed_control && typeof state.seed_control === "object" ? state.seed_control : {}) };
@@ -398,7 +410,7 @@ function install(node) {
     }));
   }, { passive: false });
   const setStatus = (message, isError = false) => { status.textContent = message; status.classList.toggle("error", isError); };
-  const emit = () => { builderState.mode = mode(); const duration = Number(node.widgets?.find(w => w.name === "duration")?.value); if (Number.isFinite(duration)) builderState.duration = duration; const resolved = builderPromptForWidget(builderState, mode()); if (promptWidget && promptWidget.value !== resolved) { promptWidget.value = resolved; promptWidget.callback?.(resolved); } state.builder_state = builderState; state.resolved_prompt = resolved; dataWidget.value = JSON.stringify(state); dataWidget.callback?.(dataWidget.value); if (builderWidget) { builderWidget.value = JSON.stringify(builderState); builderWidget.callback?.(builderWidget.value); } node.graph?.setDirtyCanvas(true, true); };
+  const emit = () => { builderState.mode = mode(); const duration = Number(node.widgets?.find(w => w.name === "duration")?.value); if (Number.isFinite(duration)) builderState.duration = duration; const resolved = builderPromptForWidget(builderState, mode()); if (promptWidget && promptWidget.value !== resolved) { promptWidget.value = resolved; promptWidget.callback?.(resolved); } state.field_heights = { ...fieldHeights }; state.builder_state = builderState; state.resolved_prompt = resolved; dataWidget.value = JSON.stringify(state); dataWidget.callback?.(dataWidget.value); if (builderWidget) { builderWidget.value = JSON.stringify(builderState); builderWidget.callback?.(builderWidget.value); } node.graph?.setDirtyCanvas(true, true); };
   const promptStyle = () => { const v = builderState?.prompt_mode; return v === "simple" || v === "structured" ? v : "structured"; };
   function legacySimplePromptFor(m) {
     if (m === "REF2VA") {
@@ -474,19 +486,19 @@ function install(node) {
   function buildBaseForm(panel) {
     panel.replaceChildren();
     const label = document.createElement("div"); label.className = "ds-h3-small"; label.textContent = `${mode()} prompt builder`; panel.appendChild(label);
-    const imdArea = createBuilderField("integrated_multimodal_description", builderState.imd, { rows: 6, placeholder: "[Shot 1] Start your scene description here...", onChange: val => { builderState.imd = val; emit(); } });
+    const imdArea = createBuilderField("integrated_multimodal_description", builderState.imd, { rows: 6, placeholder: "[Shot 1] Start your scene description here...", onChange: val => { builderState.imd = val; emit(); }, fieldKey: "imd" }, fieldHeights);
     allowNativeTextEditing(imdArea.querySelector("textarea"));
     const helpers = document.createElement("div"); helpers.className = "ds-h3-actions";
     const shotBtn = document.createElement("button"); shotBtn.textContent = "Insert [Shot N]"; shotBtn.onclick = () => { const n = window.prompt("Shot number:", "1"); if (n) insertAtCursor(imdArea.querySelector("textarea"), `[Shot ${n}] `); }; helpers.appendChild(shotBtn);
     panel.appendChild(helpers); panel.appendChild(imdArea);
-    const soundscape = createBuilderField("overall_soundscape", builderState.soundscape, { rows: 3, placeholder: "Describe ambient sounds, dialogue, effects...", onChange: val => { builderState.soundscape = val; emit(); } }); allowNativeTextEditing(soundscape.querySelector("textarea")); panel.appendChild(soundscape);
-    const music = createBuilderField("non_diegetic_music", builderState.music, { rows: 2, placeholder: 'N/A or describe background score...', onChange: val => { builderState.music = val; emit(); } }); allowNativeTextEditing(music.querySelector("textarea")); panel.appendChild(music);
+    const soundscape = createBuilderField("overall_soundscape", builderState.soundscape, { rows: 3, placeholder: "Describe ambient sounds, dialogue, effects...", onChange: val => { builderState.soundscape = val; emit(); }, fieldKey: "soundscape" }, fieldHeights); allowNativeTextEditing(soundscape.querySelector("textarea")); panel.appendChild(soundscape);
+    const music = createBuilderField("non_diegetic_music", builderState.music, { rows: 2, placeholder: 'N/A or describe background score...', onChange: val => { builderState.music = val; emit(); }, fieldKey: "music" }, fieldHeights); allowNativeTextEditing(music.querySelector("textarea")); panel.appendChild(music);
   }
 
   function buildSimpleForm(panel) {
     panel.replaceChildren();
     const label = document.createElement("div"); label.className = "ds-h3-small"; label.textContent = `${mode()} simple prompt`; panel.appendChild(label);
-    const simplePrompt = createBuilderField("Prompt", builderState.simple_prompt, { rows: 10, placeholder: "Write the complete MiniMax H3 prompt...", onChange: val => { builderState.simple_prompt = val; emit(); } });
+    const simplePrompt = createBuilderField("Prompt", builderState.simple_prompt, { rows: 10, placeholder: "Write the complete MiniMax H3 prompt...", onChange: val => { builderState.simple_prompt = val; emit(); }, fieldKey: "simple_prompt" }, fieldHeights);
     allowNativeTextEditing(simplePrompt.querySelector("textarea"));
     panel.appendChild(simplePrompt);
   }
@@ -500,12 +512,12 @@ function install(node) {
     const prefillBtn = document.createElement("button"); prefillBtn.textContent = "Prefill Labels & Summary"; prefillBtn.title = "Generate Subject/Picture/Video/Audio labels from inserted media and fill summary template"; prefillBtn.onclick = () => { generateRefLabelsAndSummary(panel); }; helpers.appendChild(prefillBtn);
     const previewBtn = document.createElement("button"); previewBtn.textContent = "Preview Prompt"; previewBtn.title = "Show the full prompt that will be sent upstream"; previewBtn.onclick = () => { showPromptPreview(); }; helpers.appendChild(previewBtn);
     panel.appendChild(helpers);
-    const subjField = createBuilderField("subject_definitions:", r.subject_definitions, { rows: 4, placeholder: "<Subject 1> is the woman in <Picture 1>, with short dark hair and a red coat.\n<Picture 1> is the opening-frame anchor for [Shot 1].\n<Subject 2> is the walking motion taken from <Video 1>.\n<Video 1> provides the camera path and pacing structure.\n<Audio 1> is the voice-timbre reference for <Subject 1>.", onChange: val => { r.subject_definitions = val; emit(); } }); allowNativeTextEditing(subjField.querySelector("textarea")); panel.appendChild(subjField);
-    const summaryField = createBuilderField("summary:", r.summary, { rows: 3, placeholder: "[reference generation + audio reference] Use <Subject 1> from <Picture 1>, the motion and pacing of <Video 1>, and the voice character of <Audio 1>.", onChange: val => { r.summary = val; emit(); } }); allowNativeTextEditing(summaryField.querySelector("textarea")); panel.appendChild(summaryField);
-    const retField = createBuilderField("retention_analysis:", r.retention_analysis, { rows: 4, placeholder: "<Subject 1> (appears in [Shot 1], [Shot 2]): fully_preserved - identity and clothing remain consistent.\n<Picture 1> ([Shot 1] first frame): fully_preserved - opening composition anchor.\n<Subject 2> (motion transferred to <Subject 1>): attribute_transfer - walk rhythm is applied to <Subject 1>.\n<Video 1> (pacing structure): weak_reference - general timing and camera rhythm are retained.\n<Audio 1>: reference - timbre and delivery are followed without copying the signal.", onChange: val => { r.retention_analysis = val; emit(); } }); allowNativeTextEditing(retField.querySelector("textarea")); panel.appendChild(retField);
-    const detailField = createBuilderField("detailed_description:", r.detailed_description, { rows: 5, placeholder: "[Shot 1] ... [Shot 2] At 00:04.500, ...", dataAttr: "detail", onChange: val => { r.detailed_description = val; emit(); } }); allowNativeTextEditing(detailField.querySelector("textarea")); panel.appendChild(detailField);
-    const rsoundField = createBuilderField("overall_soundscape:", r.soundscape, { rows: 2, placeholder: "Audio environment description...", onChange: val => { r.soundscape = val; emit(); } }); allowNativeTextEditing(rsoundField.querySelector("textarea")); panel.appendChild(rsoundField);
-    const rmusicField = createBuilderField("non_diegetic_music:", r.music, { rows: 2, placeholder: "N/A or background score...", onChange: val => { r.music = val; emit(); } }); allowNativeTextEditing(rmusicField.querySelector("textarea")); panel.appendChild(rmusicField);
+    const subjField = createBuilderField("subject_definitions:", r.subject_definitions, { rows: 4, placeholder: "<Subject 1> is the woman in <Picture 1>, with short dark hair and a red coat.\n<Picture 1> is the opening-frame anchor for [Shot 1].\n<Subject 2> is the walking motion taken from <Video 1>.\n<Video 1> provides the camera path and pacing structure.\n<Audio 1> is the voice-timbre reference for <Subject 1>.", onChange: val => { r.subject_definitions = val; emit(); }, fieldKey: "ref_subject_definitions" }, fieldHeights); allowNativeTextEditing(subjField.querySelector("textarea")); panel.appendChild(subjField);
+    const summaryField = createBuilderField("summary:", r.summary, { rows: 3, placeholder: "[reference generation + audio reference] Use <Subject 1> from <Picture 1>, the motion and pacing of <Video 1>, and the voice character of <Audio 1>.", onChange: val => { r.summary = val; emit(); }, fieldKey: "ref_summary" }, fieldHeights); allowNativeTextEditing(summaryField.querySelector("textarea")); panel.appendChild(summaryField);
+    const retField = createBuilderField("retention_analysis:", r.retention_analysis, { rows: 4, placeholder: "<Subject 1> (appears in [Shot 1], [Shot 2]): fully_preserved - identity and clothing remain consistent.\n<Picture 1> ([Shot 1] first frame): fully_preserved - opening composition anchor.\n<Subject 2> (motion transferred to <Subject 1>): attribute_transfer - walk rhythm is applied to <Subject 1>.\n<Video 1> (pacing structure): weak_reference - general timing and camera rhythm are retained.\n<Audio 1>: reference - timbre and delivery are followed without copying the signal.", onChange: val => { r.retention_analysis = val; emit(); }, fieldKey: "ref_retention_analysis" }, fieldHeights); allowNativeTextEditing(retField.querySelector("textarea")); panel.appendChild(retField);
+    const detailField = createBuilderField("detailed_description:", r.detailed_description, { rows: 5, placeholder: "[Shot 1] ... [Shot 2] At 00:04.500, ...", dataAttr: "detail", onChange: val => { r.detailed_description = val; emit(); }, fieldKey: "ref_detailed_description" }, fieldHeights); allowNativeTextEditing(detailField.querySelector("textarea")); panel.appendChild(detailField);
+    const rsoundField = createBuilderField("overall_soundscape:", r.soundscape, { rows: 2, placeholder: "Audio environment description...", onChange: val => { r.soundscape = val; emit(); }, fieldKey: "ref_soundscape" }, fieldHeights); allowNativeTextEditing(rsoundField.querySelector("textarea")); panel.appendChild(rsoundField);
+    const rmusicField = createBuilderField("non_diegetic_music:", r.music, { rows: 2, placeholder: "N/A or background score...", onChange: val => { r.music = val; emit(); }, fieldKey: "ref_music" }, fieldHeights); allowNativeTextEditing(rmusicField.querySelector("textarea")); panel.appendChild(rmusicField);
   }
 
   function generateRefLabelsAndSummary(panel) {
@@ -1154,6 +1166,11 @@ function install(node) {
   node.onResize = function (...args) { oldResize?.apply(this, args); syncNodeBounds(); };
   const restorePersistedState = () => {
     state = parseState(dataWidget.value);
+    for (const key of Object.keys(fieldHeights)) delete fieldHeights[key];
+    for (const [key, value] of Object.entries(state.field_heights || {})) {
+      const height = Number(value);
+      if (Number.isFinite(height) && height >= 60) fieldHeights[key] = height;
+    }
     state.postprocess_recipe = Array.isArray(state.postprocess_recipe) ? state.postprocess_recipe : DEFAULT_POSTPROCESS_RECIPE;
     state.internal_execution = { sampler: "res_multistep", scheduler: "simple", steps: 25, shift_video: 11, shift_audio: 4, comfy_kitchen_attention: false, cache: { enabled: false, reuse_threshold: 0.05, start_percent: 0.15, end_percent: 0.90, max_steps: 2, device: "auto", verbose: false }, ...(state.internal_execution && typeof state.internal_execution === "object" ? state.internal_execution : {}) };
     state.internal_execution.cache = { enabled: false, reuse_threshold: 0.05, start_percent: 0.15, end_percent: 0.90, max_steps: 2, device: "auto", verbose: false, ...(state.internal_execution.cache && typeof state.internal_execution.cache === "object" ? state.internal_execution.cache : {}) };
