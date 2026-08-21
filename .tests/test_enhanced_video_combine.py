@@ -463,3 +463,17 @@ def test_missing_ffmpeg_reports_required_mp4_fallback(tmp_path, monkeypatch):
             images, 24.0, "H.264", "Auto", "Auto", 10, False, True,
             "video", True, False,
         )
+
+
+def test_audio_encoder_coerces_bool_to_auto():
+    # Guards the positional widgets_values drift: a bool must never reach encoding.
+    assert enhanced_video_combine._audio_encoder(True, "WebM") == "libopus"
+    assert enhanced_video_combine._audio_encoder(True, "MP4") == "aac"
+    assert enhanced_video_combine._audio_encoder("Auto", "WebM") == "libopus"
+    assert enhanced_video_combine._audio_encoder("AAC", "MP4") == "aac"
+
+
+def test_audio_codec_combo_schema_is_stable():
+    controls = enhanced_video_combine.DaSiWa_EnhancedVideoCombine.INPUT_TYPES()["required"]
+    assert controls["audio_codec"][0] == ["Auto", "AAC", "Opus", "MP3"]
+    assert controls["audio_codec"][1]["default"] == "Auto"
