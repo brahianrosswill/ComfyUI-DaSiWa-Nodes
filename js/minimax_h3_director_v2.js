@@ -1122,7 +1122,7 @@ function install(node) {
     timeline.append(promptPanel);
     // Keep the authoring surface in a left column while Preview & Output stays beside it.
     saveNodePanel.remove(); controlRow.style.display = "block";
-    const leftColumn = document.createElement("div"); leftColumn.className = "ds-h3-authoring-column"; leftColumn.style.cssText = "min-width:0;display:flex;flex-direction:column;gap:6px"; leftColumn.append(controlRow, infoFeed, track, promptPanel, list);
+    const leftColumn = document.createElement("div"); leftColumn.className = "ds-h3-authoring-column"; leftColumn.style.cssText = "min-width:0;display:flex;flex-direction:column;gap:6px"; leftColumn.append(controlRow, infoFeed, track, promptPanel);
     const contentLayout = document.createElement("div"); contentLayout.className = "ds-h3-content-layout"; contentLayout.style.cssText = "width:100%;box-sizing:border-box;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:8px;align-items:stretch"; contentLayout.append(leftColumn, saveNodePanel); timeline.append(contentLayout);
     // Prompt text is edited on the corresponding media row and synchronized to prompt_blocks.
     timeline.append(status); if (domWidget) domWidget.computeSize = () => [Math.max(420, node.size?.[0] || 520), uiHeight()];

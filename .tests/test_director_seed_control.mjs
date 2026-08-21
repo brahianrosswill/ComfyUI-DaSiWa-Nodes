@@ -43,7 +43,7 @@ assert.match(source, /ds-h3-info-feed/, "Director must render a dedicated inform
 assert.match(source, /grid-template-columns:minmax\(0,1fr\) minmax\(0,1\.2fr\)/, "Preview & Output must receive more width than controls");
 assert.match(source, /min-height:420px/, "Preview & Output must be substantially taller");
 assert.match(source, /contentLayout\.append\(leftColumn, saveNodePanel\)/, "all controls, media inputs, and prompt content must be in the left column beside Preview & Output");
-assert.match(source, /leftColumn\.append\(controlRow, infoFeed, track, promptPanel, list\)/, "left column must contain Director controls, feed, media inputs, and prompts");
+assert.match(source, /leftColumn\.append\(controlRow, infoFeed, track, promptPanel\)/, "left column must contain Director controls, feed, media inputs, and prompts");
 assert.match(source, /align-items:stretch/, "Preview & Output must stretch to the full authoring-column height");
 assert.match(source, /height:100%/, "Preview & Output panel must fill its stretched grid cell");
 assert.match(source, /infoFeed\.append\(readout, postprocessInfo\)/, "resolution and post-processing summary must share the information feed");
