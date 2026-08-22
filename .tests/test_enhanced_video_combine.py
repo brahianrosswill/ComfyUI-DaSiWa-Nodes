@@ -101,7 +101,9 @@ def test_node_schema_and_registration():
     assert 'syncBooleanWidget(this, "save_last_frame", saveLastFrame.checked)' in preview_source
     assert "actions.append(saveFirstFrameLabel, saveLastFrameLabel, autoPlayLabel, download)" in preview_source
     assert 'autoPlay.type = "checkbox"' in preview_source
-    assert "autoPlay.checked = true;" in preview_source
+    assert "this.properties ??= {};" in preview_source
+    assert "autoPlay.checked = this.properties.autoplay ?? true;" in preview_source
+    assert "this.properties.autoplay = autoPlay.checked;" in preview_source
     assert 'autoPlayLabel.append(autoPlay, " Autoplay")' in preview_source
     assert 'margin-left:auto' in preview_source
     assert "if (autoPlay.checked) preview.play().catch(() => {});" in preview_source
