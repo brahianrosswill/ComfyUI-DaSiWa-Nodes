@@ -86,10 +86,12 @@ def test_optional_sampling_sockets_present():
 
 def test_preview_sockets_present():
     opt = MiniMaxH3DirectorV2.INPUT_TYPES()["optional"]
-    # The tiny-VAE selector is a plain combo widget (no forceInput), not a
-    # linkable input socket — users pick it like any other dropdown.
+    # The tiny-VAE selector is a socketless combo widget — rendered like a
+    # model selector (e.g. the VAE loader's dropdown), no linkable input
+    # dot on the node edge.
     assert opt["preview_tiny_vae"][0] == "STRING"
     assert opt["preview_tiny_vae"][1].get("forceInput") is not True
+    assert opt["preview_tiny_vae"][1].get("socketless") is True
     # The full-quality VAE path remains an optional input socket.
     assert opt["preview_vae"][0] == "VAE"
     # INPUT_TYPES() is evaluated once at node load: the combo value is the
