@@ -5,7 +5,7 @@ DEFAULT_POSTPROCESS_RECIPE = (
     {"id": "frame_interpolation", "enabled": False, "factor": 2, "model": "rife_v4.26.safetensors"},
     {"id": "torch_resize", "enabled": False, "size_mode": "Multiplier", "scale_multiplier": 2, "interpolation": "Lanczos"},
     {"id": "model_upscale", "enabled": False, "model_name": "2x-AnimeSharpV4_RCAN.safetensors"},
-    {"id": "rtx_refiner", "enabled": False, "denoise": False, "denoise_quality": "Ultra", "deblur": False, "deblur_quality": "Ultra", "upscale": "VSR", "upscale_quality": "Ultra", "resize_type": "Scale", "scale": 2.0, "megapixels": 2.0, "width": 1920, "height": 1080, "divisible_by": "8", "ratio_preset": "16:9", "resize_method": "Center Crop (Fill)", "device_id": 0, "empty_cache": False, "use_mmap": True, "auto_unload_models": True},
+    {"id": "rtx_refiner", "enabled": False, "denoise": False, "denoise_quality": "Ultra", "deblur": False, "deblur_quality": "Ultra", "upscale": "VSR", "upscale_quality": "Ultra", "resize_type": "Scale", "scale": 2.0, "megapixels": 2.0, "width": 1920, "height": 1080, "divisible_by": "8", "ratio_preset": "16:9", "resize_method": "Center Crop (Fill)", "device_id": 0, "empty_cache": False, "use_mmap": False, "auto_unload_models": True},
     {"id": "watermark", "enabled": False, "watermark_path": "", "position": "bottom-right"},
 )
 

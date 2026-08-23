@@ -45,5 +45,5 @@ def test_rtx_refiner_recipe_exposes_full_node_options():
     assert rtx["resize_type"] == "Scale"
     assert rtx["scale"] == 2.0
     assert rtx["divisible_by"] == "8"
-    assert rtx["use_mmap"] is True
+    assert rtx["use_mmap"] is False
     assert rtx["auto_unload_models"] is True

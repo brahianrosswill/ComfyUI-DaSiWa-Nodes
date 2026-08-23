@@ -72,7 +72,7 @@ const PP_STAGE_FIELDS = {
     { key: "resize_method", type: "combo", options: ["Center Crop (Fill)", "Letterbox (Fit)"], default: "Center Crop (Fill)" },
     { key: "device_id", type: "number", min: 0, max: 8, step: 1, default: 0 },
     { key: "empty_cache", type: "boolean", default: false },
-    { key: "use_mmap", type: "boolean", default: true },
+    { key: "use_mmap", type: "boolean", default: false },
     { key: "auto_unload_models", type: "boolean", default: true },
   ],
   watermark: [
