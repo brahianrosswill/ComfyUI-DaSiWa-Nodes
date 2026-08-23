@@ -84,3 +84,7 @@ assert.ok(source.includes("__dasiwaH3ShowStepPreview"), "preview events must rou
 assert.ok(source.includes("step ${payload.step}/"), "the live slot must caption the current step over the total");
 // ---- Preview popup width ----
 assert.match(source, /\.ds-h3-preview-panel\{width:min\(400px,90vw\)/, "the media preview popup must be a third narrower (400px, was 600px)");
+// ---- preview_tiny_vae combo ring strip ----
+assert.match(source, /input\.name === "preview_tiny_vae"/, "the Director must target the preview_tiny_vae socket to strip its ring");
+assert.match(source, /input\.shape = null/, "the preview_tiny_vae optional socket shape must be nulled so no hollow ring draws (VAELoader look)");
+assert.match(source, /for \(const input of node\.inputs \|\| \[\]\)/, "the ring strip must iterate the node's input sockets");

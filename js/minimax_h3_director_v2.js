@@ -335,6 +335,12 @@ function install(node) {
   node.__dasiwaH3Installed = true;
   installStyles();
   if (!window.__dasiwaH3MenuCloseInstalled) { window.__dasiwaH3MenuCloseInstalled = true; window.addEventListener("pointerdown", event => { const open = document.querySelector(".ds-h3-res-menu.open"); if (open && !open.parentElement.contains(event.target)) open.classList.remove("open"); }, true); }
+  // preview_tiny_vae ships as a bare-list combo (the VAELoader look). As an
+  // optional socket LiteGraph would still draw a hollow ring on the node edge
+  // (core's required VAELoader.vae_name gets none). Null the socket shape so
+  // the combo reads as a plain model selector; the socket stays present and
+  // connectable, only the ring is gone. Runs on nodeCreated + loadedGraphNode.
+  for (const input of node.inputs || []) if (input.name === "preview_tiny_vae") { input.shape = null; break; }
   const dataWidget = node.widgets?.find(w => w.name === "timeline_data");
   if (!dataWidget) return;
   dataWidget.hidden = true; dataWidget.options = { ...(dataWidget.options || {}), hidden: true };

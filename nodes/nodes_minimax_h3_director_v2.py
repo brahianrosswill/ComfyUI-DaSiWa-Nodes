@@ -95,7 +95,7 @@ class MiniMaxH3DirectorV2:
                 "external_steps": ("INT", {"default": 0, "min": 0, "forceInput": True}),
                 "external_shift_video": ("FLOAT", {"default": 0.0, "min": 0.0, "forceInput": True}),
                 "external_shift_audio": ("FLOAT", {"default": 0.0, "min": 0.0, "forceInput": True}),
-                "preview_tiny_vae": (_vae_approx_options(), {"default": "none", "socketless": True, "tooltip": "Optional tiny VAE decoder (models/vae_approx) for fast step previews. Overrides preview_vae and the built-in previewer."}),
+                "preview_tiny_vae": (_vae_approx_options(), {"default": "none", "tooltip": "Optional tiny VAE decoder (models/vae_approx) for fast step previews. Overrides preview_vae and the built-in previewer. Rendered as a plain combo selector (no input ring) — the Director's JS strips the optional socket shape."}),
                 "preview_vae": ("VAE", {"lazy": True}),
             },
             "hidden": {"prompt_context": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO", "unique_id": "UNIQUE_ID"},

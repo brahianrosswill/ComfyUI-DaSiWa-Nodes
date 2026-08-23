@@ -87,14 +87,15 @@ def test_optional_sampling_sockets_present():
 def test_preview_sockets_present():
     opt = MiniMaxH3DirectorV2.INPUT_TYPES()["optional"]
     # The tiny-VAE selector is a bare-list COMBO spec (the same shape as
-    # core VAELoader.vae_name) with socketless=True — rendered like a
-    # model selector (e.g. the VAE loader's dropdown), no linkable input
-    # dot on the node edge. In frontend v1.49.x the bare-list form is
-    # what maps to a combo widget; a legacy ("STRING", {"combo": ...})
-    # tuple degrades to a free-text field instead.
+    # core VAELoader.vae_name) — rendered like a model selector. The
+    # hollow input ring is stripped client-side: the Director's JS nulls the
+    # socket's shape (VAELoader.vae_name is required -> no ring; an optional
+    # socket would draw a HollowCircle). No `socketless` option dict key is
+    # relied on: in frontend v1.49.x addComboWidget only copies
+    # {values,advanced,hidden} onto widget.options, so a legacy
+    # options-dict `socketless` flag never reaches the gate and does nothing.
     assert isinstance(opt["preview_tiny_vae"][0], list)
     assert opt["preview_tiny_vae"][1].get("forceInput") is not True
-    assert opt["preview_tiny_vae"][1].get("socketless") is True
     assert opt["preview_tiny_vae"][1].get("default") == "none"
     # The full-quality VAE path remains an optional input socket.
     assert opt["preview_vae"][0] == "VAE"
