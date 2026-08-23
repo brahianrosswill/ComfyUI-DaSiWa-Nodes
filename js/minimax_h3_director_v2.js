@@ -109,6 +109,16 @@ const PP_H3_CACHE_FIELDS = [
   { key: "device", type: "combo", options: ["auto", "cuda", "cpu"], default: "auto" },
   { key: "verbose", type: "boolean", default: false },
 ];
+// MiniMax H3 sampling contract (comfy.samplers KSamplerSelect/BasicScheduler names).
+const SAMPLER_OPTIONS = ["euler", "euler_ancestral", "euler_ancestral_cfg_pp", "heun", "dpmpp_2m", "dpmpp_2m_sde", "dpmpp_2m_sde_gpu", "dpmpp_2s_ancestral", "dpmpp_sde", "lms", "dpm_2", "res_multistep", "res_multistep_cfg_pp", "res_multistep_ancestral", "res_multistep_ancestral_cfg_pp", "uni_pc"];
+const SCHEDULER_OPTIONS = ["simple", "sgm_uniform", "karras", "exponential", "ddim_uniform", "beta", "normal", "linear_quadratic", "kl_optimal"];
+// Built-in live step-preview settings (rendered inside the ☰ "Preview & Output options" modal).
+const PREVIEW_OPTION_FIELDS = [
+  { key: "live_step_preview", type: "boolean", default: true },
+  { key: "preview_max_resolution", type: "number", default: 1024, min: 0, max: 8192 },
+  { key: "preview_frames", type: "number", default: 1, min: 1, max: 32 },
+  { key: "preview_fps", type: "number", default: 12, min: 1, max: 60 },
+];
 // Fetch a ComfyUI model-folder listing (e.g. "upscale_models", "frame_interpolation").
 async function ppLoadModelList(folder) {
   try {
@@ -197,6 +207,15 @@ function installStyles() {
   style.textContent += `.ds-h3-res-field{display:flex;flex-direction:column;gap:3px;min-width:150px;font-size:10px;font-weight:600;letter-spacing:.4px;color:#8fb3d6;text-transform:uppercase}.ds-h3-res-control{display:flex;position:relative}.ds-h3-res-select{position:absolute;inset:0;width:100%;opacity:0;pointer-events:none}.ds-h3-res-btn{width:100%;display:flex;align-items:center;gap:8px;box-sizing:border-box;min-height:30px;padding:0 9px;background:#16283a;border:1px solid #2f5478;border-radius:5px;color:#d6ebff;font:12px system-ui,sans-serif;cursor:pointer;text-align:left;transition:background .16s ease,border-color .16s ease,box-shadow .16s ease}.ds-h3-res-btn:hover:not(:disabled){background:#1d3550;border-color:#3f79b4;box-shadow:0 0 9px rgba(74,144,217,.28)}.ds-h3-res-btn:focus-visible{outline:none;border-color:#4f97d6;box-shadow:0 0 0 2px rgba(74,144,217,.35)}.ds-h3-res-btn:disabled{opacity:.4;cursor:not-allowed}.ds-h3-res-label{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ds-h3-res-caret{flex:none;color:#6fa8e0;font-size:9px;transition:transform .18s ease}.ds-h3-res-btn[aria-expanded="true"] .ds-h3-res-caret{transform:rotate(180deg)}.ds-h3-res-swatch{flex:none;display:flex;align-items:center;justify-content:center;width:20px;height:20px}.ds-h3-res-swatch-box{background:#3f79b4;border:1px solid #9fd0ff;border-radius:1px;box-shadow:inset 0 0 4px rgba(0,0,0,.4);transition:background .16s ease,border-color .16s ease,box-shadow .16s ease}.ds-h3-res-btn:hover:not(:disabled) .ds-h3-res-swatch-box,.ds-h3-res-btn[aria-expanded="true"] .ds-h3-res-swatch-box{background:#5b9be0;border-color:#c4e4ff}.ds-h3-res-menu{position:absolute;top:calc(100% + 4px);left:0;z-index:2500;min-width:100%;max-height:290px;overflow-y:auto;padding:4px;background:#101c28;border:1px solid #35618f;border-radius:6px;box-shadow:0 10px 30px rgba(0,0,0,.65);display:none}.ds-h3-res-menu.open{display:block}.ds-h3-res-menu.grid.open{display:grid;gap:2px}.ds-h3-res-menu.grid .ds-h3-res-item-label{white-space:normal;overflow-wrap:anywhere}.ds-h3-res-menu[data-place="up"]{top:auto;bottom:calc(100% + 4px)}.ds-h3-res-item{display:flex;align-items:center;gap:8px;width:100%;box-sizing:border-box;padding:6px 9px;background:transparent;border:0;border-radius:4px;color:#cfe3f7;font:12px system-ui,sans-serif;cursor:pointer;text-align:left;transition:background .12s ease,color .12s ease,box-shadow .12s ease}.ds-h3-res-item:hover{background:rgba(74,144,217,.24);color:#fff;box-shadow:inset 0 0 0 1px rgba(96,168,232,.35)}.ds-h3-res-item.active{background:rgba(74,144,217,.34);color:#fff;font-weight:600;box-shadow:inset 0 0 0 1px rgba(120,190,255,.55)}.ds-h3-res-item.active:hover{background:rgba(74,144,217,.44)}.ds-h3-res-item-label{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ds-h3-res-num{width:100%;box-sizing:border-box;height:30px;padding:0 8px;background:#16283a;border:1px solid #2f5478;border-radius:5px;color:#d6ebff;font:12px system-ui,sans-serif;transition:background .16s ease,border-color .16s ease,box-shadow .16s ease}.ds-h3-res-num:hover:not(:disabled){background:#1d3550;border-color:#3f79b4}.ds-h3-res-num:focus{outline:none;border-color:#4f97d6;box-shadow:0 0 0 2px rgba(74,144,217,.3)}.ds-h3-res-num:disabled{opacity:.4;cursor:not-allowed}.ds-h3-res-menu.cols.open{display:flex;align-items:flex-start;gap:7px}.ds-h3-res-col{display:flex;flex-direction:column;gap:2px;min-width:84px}.ds-h3-res-col-title{font-size:9px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#6fa8e0;padding:1px 9px 3px;border-bottom:1px solid #2f5478;margin-bottom:2px}.ds-h3-res-menu.cols .ds-h3-res-item{white-space:nowrap}`;
   document.head.appendChild(style);
 }
+
+// Built-in live step preview: the backend OUTER_SAMPLE wrapper ships per-step
+// frames to the Director's own Preview & Output panel. Route each event to the
+// matching node's live slot (node_id === ComfyUI node id === unique_id).
+api.addEventListener("dasiwa_director_v2_preview", e => {
+  const d = e.detail || e.data || {};
+  const n = app.graph?._nodes?.find(x => String(x.id) === String(d.node_id));
+  n?.__dasiwaH3ShowStepPreview?.({ src: `data:${d.mime};base64,${d.image}`, mime: d.mime, w: d.w, h: d.h, step: d.step, total: d.total, fps: d.fps ?? 12, frames: d.frames });
+});
 
 function parseState(value) { try { const s = JSON.parse(value || "{}"); return { ...DEFAULT_STATE, ...s, items: Array.isArray(s.items) ? s.items : [], prompt_blocks: Array.isArray(s.prompt_blocks) ? s.prompt_blocks : [] }; } catch { return structuredClone(DEFAULT_STATE); } }
 function textValue(value) { return typeof value === "string" ? value.trim() : ""; }
@@ -385,9 +404,11 @@ function install(node) {
     const w = externalPromptWidget();
     return Boolean(w && String(w.value || "").trim().length > 0);
   };
+  const hasExternalSampling = () => ["external_sampler", "external_scheduler", "external_steps", "external_shift_video", "external_shift_audio"].some(n => node.inputs?.find(i => i.name === n)?.link != null);
   let lastExternalPromptLinked = hasExternalPrompt();
   let lastExternalCanvasLinked = hasExternalCanvas();
   let lastExternalSeedLinked = hasExternalSeed();
+  let lastExternalSamplingLinked = hasExternalSampling();
   const status = document.createElement("div"); status.className = "ds-h3-status ds-h3-info-field"; status.textContent = ""; status.style.display = "none";
 
   const timeline = document.createElement("div"); timeline.className = "ds-h3 ds-h3-root"; timeline.tabIndex = 0;
@@ -937,7 +958,7 @@ function install(node) {
     const controlRow = document.createElement("div"); controlRow.className = "ds-h3-control-row"; controlRow.style.cssText = "width:100%;box-sizing:border-box;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:6px;margin-top:6px";
     const postprocessPanel = document.createElement("div"); postprocessPanel.className = "ds-h3-postprocess-row"; postprocessPanel.style.cssText = "width:100%;box-sizing:border-box;display:flex;flex-wrap:wrap;align-items:center;gap:5px;padding:4px 0 0;border-top:1px solid #344452;margin-top:2px";
     const saveNodePanel = document.createElement("section"); saveNodePanel.className = "ds-h3-save-node"; saveNodePanel.style.cssText = "min-width:0;min-height:420px;height:100%;box-sizing:border-box;display:flex;flex-direction:column;gap:6px;padding:8px;background:#0d1217;border:1px solid #344452;border-radius:6px";
-    let optimizationPanel = null; let postprocessInfo = null;
+    let optimizationPanel = null; let postprocessInfo = null; let samplingPanel = null;
     {
 
       const openStageSettings = (label, target, fieldList) => {
@@ -1022,19 +1043,61 @@ function install(node) {
       const makeOptPill = (label, active, onToggle, onSettings) => { const pill = document.createElement("div"); pill.className = "ds-h3-pp-btn"; pill.setAttribute("role", "button"); pill.setAttribute("tabindex", "0"); pill.classList.toggle("active", active); pill.title = `Toggle ${label}`; pill.append(document.createTextNode(label)); const toggleOpt = () => { onToggle(); emit(); render(); }; pill.onclick = (event) => { if (event.target.closest(".ds-h3-pp-burger")) return; toggleOpt(); }; pill.onkeydown = (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); if (event.target.closest(".ds-h3-pp-burger")) return; toggleOpt(); } }; if (onSettings) { const burger = document.createElement("button"); burger.type = "button"; burger.className = "ds-h3-pp-burger"; burger.textContent = "☰"; burger.title = `Configure ${label}`; burger.onclick = (event) => { event.stopPropagation(); onSettings(); }; pill.append(burger); } optimizationPanel.append(pill); };
       makeOptPill("Comfy Kitchen Attention", Boolean(exec.comfy_kitchen_attention), () => { exec.comfy_kitchen_attention = !exec.comfy_kitchen_attention; }, null);
       makeOptPill("MiniMax H3 Cache", Boolean(exec.cache.enabled), () => { exec.cache.enabled = !exec.cache.enabled; }, () => { openStageSettings("MiniMax H3 Cache", exec.cache, PP_H3_CACHE_FIELDS); });
+      // Sampling panel: sampler/scheduler dropdowns + steps/shift number inputs,
+      // all bound to state.internal_execution (the backend already honors these).
+      const updateExec = (patch) => mutate(s => { const next = { ...s.internal_execution, ...patch }; if ("steps" in next) next.steps = Math.max(1, Math.min(1000, Math.trunc(next.steps || 25))); if ("shift_video" in next) next.shift_video = Math.max(0, Number(next.shift_video) || 0); if ("shift_audio" in next) next.shift_audio = Math.max(0, Number(next.shift_audio) || 0); s.internal_execution = next; });
+      samplingPanel = document.createElement("div"); samplingPanel.className = "ds-h3-sampling-row"; samplingPanel.style.cssText = "width:100%;box-sizing:border-box;display:flex;flex-wrap:wrap;align-items:end;gap:8px;padding:6px 0 0;border-top:1px solid #344452;margin-top:4px";
+      const samplingTitle = document.createElement("span"); samplingTitle.textContent = "Sampling:"; samplingTitle.style.cssText = "font-size:11px;color:#9fb3c2;font-weight:600;width:100%"; samplingPanel.append(samplingTitle);
+      const makeSamplingSelect = (label, value, options) => { const field = document.createElement("label"); field.style.cssText = "display:flex;flex-direction:column;gap:3px;font-size:10px;font-weight:600;letter-spacing:.4px;color:#8fb3d6;text-transform:uppercase"; const cap = document.createElement("span"); cap.textContent = label; field.append(cap); const select = document.createElement("select"); select.style.cssText = "min-width:160px;padding:3px 6px;background:#16283a;border:1px solid #2f5478;border-radius:4px;color:#d6ebff;font:12px system-ui,sans-serif"; options.forEach(opt => { const o = document.createElement("option"); o.value = opt; o.textContent = opt; if (opt === value) o.selected = true; select.append(o); }); if (!options.includes(value)) { const o = document.createElement("option"); o.value = value; o.textContent = `${value} (current)`; o.selected = true; select.append(o); } select.onchange = () => updateExec({ [label === "SAMPLER" ? "sampler" : "scheduler"]: select.value }); field.append(select); samplingPanel.append(field); return select; };
+      const samplerSelect = makeSamplingSelect("SAMPLER", exec.sampler, SAMPLER_OPTIONS);
+      const schedulerSelect = makeSamplingSelect("SCHEDULER", exec.scheduler, SCHEDULER_OPTIONS);
+      const makeSamplingNumber = (label, value, key, step, min, max, fallback) => { const field = document.createElement("label"); field.style.cssText = "display:flex;flex-direction:column;gap:3px;font-size:10px;font-weight:600;letter-spacing:.4px;color:#8fb3d6;text-transform:uppercase"; const cap = document.createElement("span"); cap.textContent = label; field.append(cap); const input = document.createElement("input"); input.type = "number"; input.step = step; input.min = min; input.max = max; input.value = value; input.style.cssText = "min-width:74px;padding:3px 6px;background:#16283a;border:1px solid #2f5478;border-radius:4px;color:#d6ebff;font:12px system-ui,sans-serif"; input.onchange = () => updateExec({ [key]: Number(input.value) || fallback }); field.append(input); samplingPanel.append(field); return input; };
+      makeSamplingNumber("STEPS", exec.steps, "steps", 1, 1, 1000, 25);
+      makeSamplingNumber("SHIFT V", exec.shift_video, "shift_video", 0.5, 0, 100, 11);
+      makeSamplingNumber("SHIFT A", exec.shift_audio, "shift_audio", 0.5, 0, 100, 4);
+      const samplingDisabled = hasExternalSampling();
+      if (samplingDisabled) {
+        samplingPanel.classList.add("disabled");
+        samplingPanel.querySelectorAll("select, input, button").forEach(el => { el.disabled = true; });
+        const note = document.createElement("div"); note.className = "ds-h3-small ds-h3-ext-note";
+        note.style.cssText = "width:100%";
+        note.textContent = "External sampling connected — local sampling fields are disabled (external values win).";
+        samplingPanel.append(note);
+      }
+      modeGroup.append(samplingPanel);
       const saveSettings = state.internal_execution.save;
       const outputKind = mode() === "Image Inpaint" ? "image" : "video";
       saveSettings.output_kind = outputKind;
       const saveTitle = document.createElement("strong"); saveTitle.textContent = "Preview & Output"; saveTitle.style.cssText = "font-size:12px;color:#d5e6f2";
       const outputSettingsHint = () => { const flag = value => value ? "on" : "off"; const parts = [`prefix ${saveSettings.filename_prefix || "Director"}`, `save ${flag(saveSettings.save_output !== false)}`, `workflow ${flag(saveSettings.save_workflow !== false)}`]; if (outputKind === "image") parts.push(String(saveSettings.file_format || "webp").toUpperCase(), `compression ${saveSettings.compression ?? 15}`); else parts.push(saveSettings.codec || "Auto", saveSettings.container || "Auto", saveSettings.bit_depth || "Auto", `quality ${saveSettings.quality ?? 20}`, `pingpong ${flag(saveSettings.pingpong)}`, `crop to audio ${flag(saveSettings.crop_to_audio)}`, `${saveSettings.audio_codec || "Auto"} ${saveSettings.audio_bitrate || "192k"}`, `first frame ${flag(saveSettings.save_first_frame)}`, `last frame ${flag(saveSettings.save_last_frame)}`); return parts.join(" · "); };
       const saveHint = document.createElement("span"); saveHint.textContent = outputSettingsHint(); saveHint.style.cssText = "font-size:11px;line-height:1.35;color:#7ee19d;overflow-wrap:anywhere";
-      const saveOptionFields = [...(outputKind === "image" ? PP_IMAGE_SAVE_FIELDS : PP_VIDEO_SAVE_FIELDS), { key: "save_output", type: "boolean", default: true }, { key: "save_workflow", type: "boolean", default: true }];
+      const saveOptionFields = [...(outputKind === "image" ? PP_IMAGE_SAVE_FIELDS : PP_VIDEO_SAVE_FIELDS), ...PREVIEW_OPTION_FIELDS, { key: "save_output", type: "boolean", default: true }, { key: "save_workflow", type: "boolean", default: true }];
       const saveHeader = document.createElement("div"); saveHeader.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:8px";
       const saveMenu = document.createElement("button"); saveMenu.type = "button"; saveMenu.className = "ds-h3-res-btn"; saveMenu.textContent = "☰"; saveMenu.title = "Preview & Output options"; saveMenu.style.cssText = "width:30px;min-height:26px;padding:0;justify-content:center;gap:0"; saveMenu.onclick = () => openStageSettings("Preview & Output options", saveSettings, saveOptionFields); saveHeader.append(saveTitle, saveMenu);
       const savedPreview = node.__dasiwaH3SavedPreview;
-      const previewFrame = document.createElement("div"); previewFrame.className = "ds-h3-save-preview"; previewFrame.style.cssText = "min-height:300px;flex:1;display:grid;place-items:center;background:#080d11;border:1px solid #2d4658;border-radius:4px;overflow:hidden";
-      if (savedPreview?.filename) { const isVideo = String(savedPreview.format || "").startsWith("video/") || savedPreview.container; const media = document.createElement(isVideo ? "video" : "img"); media.src = savedViewUrl(savedPreview); media.title = "Latest Director output"; media.style.cssText = "display:block;width:100%;max-height:180px;object-fit:contain;background:#000;cursor:pointer"; if (isVideo) { media.controls = true; media.muted = true; media.loop = true; media.playsInline = true; } else { media.alt = savedPreview.filename; } media.onclick = () => window.open(media.src, "_blank", "noopener,noreferrer"); previewFrame.append(media); } else { const empty = document.createElement("span"); empty.textContent = "Preview appears after the Director publishes an image or video"; empty.style.cssText = "padding:8px;text-align:center;font-size:11px;color:#9fb3c2"; previewFrame.append(empty); }
-      saveNodePanel.append(saveHeader, saveHint, previewFrame);
+      // Live step-preview slot: shows per-step frames streamed by the backend
+      // OUTER_SAMPLE wrapper (dasiwa_director_v2_preview events) until the
+      // final published output replaces it. Hidden until a run streams frames.
+      const stepPreviewSlot = document.createElement("div"); stepPreviewSlot.className = "ds-h3-step-preview"; stepPreviewSlot.style.cssText = "display:none;flex-direction:column;gap:4px;padding:6px;background:#080d11;border:1px solid #2d4658;border-radius:4px";
+      const stepPreviewMedia = document.createElement("img"); stepPreviewMedia.style.cssText = "display:block;width:100%;max-height:220px;object-fit:contain;background:#000"; stepPreviewMedia.setAttribute("alt", "Live step preview");
+      const stepPreviewCaption = document.createElement("span"); stepPreviewCaption.style.cssText = "font-size:10px;color:#7ee19d"; stepPreviewCaption.textContent = "";
+      stepPreviewSlot.append(stepPreviewMedia, stepPreviewCaption);
+      node.__dasiwaH3ShowStepPreview = (payload) => {
+        stepPreviewSlot.style.display = "flex";
+        stepPreviewSlot.parentElement.style.order = "-1";
+        const isVideo = payload.mime === "video/mp4";
+        const isAnimWebp = payload.mime === "image/webp" && (payload.frames > 1 || payload.fps);
+        let target = stepPreviewMedia;
+        if (isVideo || isAnimWebp) {
+          if (target.tagName !== "VIDEO") { const v = document.createElement("video"); v.muted = true; v.loop = true; v.playsInline = true; v.controls = isVideo; v.style.cssText = "display:block;width:100%;max-height:220px;object-fit:contain;background:#000"; target.replaceWith(v); target = v; }
+        } else if (target.tagName === "VIDEO") { const i = document.createElement("img"); i.alt = "Live step preview"; i.style.cssText = "display:block;width:100%;max-height:220px;object-fit:contain;background:#000"; target.replaceWith(i); target = i; }
+        target.src = `data:${payload.mime};base64,${payload.image}`;
+        if (target.tagName === "VIDEO") target.play?.();
+        stepPreviewCaption.textContent = payload.total ? `step ${payload.step}/${payload.total}` : `step ${payload.step}`;
+        stepPreviewSlot.parentElement?.appendChild(stepPreviewSlot);
+      };
+      saveNodePanel.append(saveHeader, saveHint, stepPreviewSlot);
+      if (savedPreview?.filename) { const isVideo = String(savedPreview.format || "").startsWith("video/") || savedPreview.container; const media = document.createElement(isVideo ? "video" : "img"); media.src = savedViewUrl(savedPreview); media.title = "Latest Director output"; media.style.cssText = "display:block;width:100%;max-height:180px;object-fit:contain;background:#000;cursor:pointer"; if (isVideo) { media.controls = true; media.muted = true; media.loop = true; media.playsInline = true; } else { media.alt = savedPreview.filename; } media.onclick = () => window.open(media.src, "_blank", "noopener,noreferrer"); const previewFrame = document.createElement("div"); previewFrame.className = "ds-h3-save-preview"; previewFrame.style.cssText = "min-height:220px;flex:1;display:grid;place-items:center;background:#080d11;border:1px solid #2d4658;border-radius:4px;overflow:hidden"; previewFrame.append(media); saveNodePanel.append(previewFrame); } else if (!savedPreview) { const previewFrame = document.createElement("div"); previewFrame.className = "ds-h3-save-preview"; previewFrame.style.cssText = "min-height:220px;flex:1;display:grid;place-items:center;background:#080d11;border:1px solid #2d4658;border-radius:4px;overflow:hidden"; const empty = document.createElement("span"); empty.textContent = "Preview appears after the Director publishes an image or video"; empty.style.cssText = "padding:8px;text-align:center;font-size:11px;color:#9fb3c2"; previewFrame.append(empty); saveNodePanel.append(previewFrame); }
       controlRow.append(modeGroup, saveNodePanel);
       timeline.append(controlRow);
     }
@@ -1216,6 +1279,11 @@ function install(node) {
       lastExternalSeedLinked = externalSeedLinked;
       requestAnimationFrame(render);
     }
+    const externalSamplingLinked = hasExternalSampling();
+    if (externalSamplingLinked !== lastExternalSamplingLinked) {
+      lastExternalSamplingLinked = externalSamplingLinked;
+      requestAnimationFrame(render);
+    }
   };
   const oldOnExecuted = node.onExecuted;
   node.onExecuted = function (message) {
@@ -1247,6 +1315,11 @@ function install(node) {
     const externalCanvasLinked = hasExternalCanvas();
     if (externalCanvasLinked !== lastExternalCanvasLinked) {
       lastExternalCanvasLinked = externalCanvasLinked;
+      render();
+    }
+    const externalSamplingLinked = hasExternalSampling();
+    if (externalSamplingLinked !== lastExternalSamplingLinked) {
+      lastExternalSamplingLinked = externalSamplingLinked;
       render();
     }
   }, 300);

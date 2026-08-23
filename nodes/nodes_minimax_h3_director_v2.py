@@ -21,9 +21,22 @@ from .helper_minimax_h3_director_execute_v2 import (
     normalize_postprocess_recipe, execute_image_inpaint, execute_h3,
 )
 from .helper_media_output_v2 import publish_media_output
+try:
+    from server import PromptServer
+except ImportError:
+    PromptServer = None
 
 BASE_MODES = {"T2VA", "I2VA", "FL2VA", "L2VA"}
 IMAGE_INPAINT_MODE = "Image Inpaint"
+
+
+def _vae_approx_options():
+    try:
+        import folder_paths
+        return ["none"] + folder_paths.get_filename_list("vae_approx")
+    except (ImportError, AttributeError):
+        # No ComfyUI on the path (repo dev test env): ship the safe default only.
+        return ["none"]
 
 
 def _describe_model(model) -> str:
@@ -31,6 +44,22 @@ def _describe_model(model) -> str:
         return "none"
     model_type = type(model)
     return f"{model_type.__module__}.{model_type.__name__}"
+
+
+def _resolve_sampling(execution, ext_sampler, ext_scheduler, ext_steps, ext_shift_v, ext_shift_a):
+    """External > internal > helper-default precedence for the five sampling fields."""
+    out = dict(execution)
+    if ext_sampler:
+        out["sampler"] = ext_sampler
+    if ext_scheduler:
+        out["scheduler"] = ext_scheduler
+    if ext_steps:
+        out["steps"] = int(ext_steps)
+    if ext_shift_v:
+        out["shift_video"] = float(ext_shift_v)
+    if ext_shift_a:
+        out["shift_audio"] = float(ext_shift_a)
+    return out
 
 
 class MiniMaxH3DirectorV2:
@@ -61,8 +90,15 @@ class MiniMaxH3DirectorV2:
                 "vae": ("VAE",),
                 "audio_vae": ("VAE",),
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff, "forceInput": True}),
+                "external_sampler": ("STRING", {"default": "", "forceInput": True}),
+                "external_scheduler": ("STRING", {"default": "", "forceInput": True}),
+                "external_steps": ("INT", {"default": 0, "min": 0, "forceInput": True}),
+                "external_shift_video": ("FLOAT", {"default": 0.0, "min": 0.0, "forceInput": True}),
+                "external_shift_audio": ("FLOAT", {"default": 0.0, "min": 0.0, "forceInput": True}),
+                "preview_tiny_vae": ("STRING", {"default": "none", "forceInput": True, "combo": _vae_approx_options()}),
+                "preview_vae": ("VAE", {"lazy": True}),
             },
-            "hidden": {"prompt_context": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
+            "hidden": {"prompt_context": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO", "unique_id": "UNIQUE_ID"},
         }
 
     RETURN_TYPES = ("FLOAT", "INT", "IMAGE")
@@ -78,7 +114,10 @@ class MiniMaxH3DirectorV2:
     def check_lazy_status(self, mode, prompt, width, height, duration, ref_image_size, timeline_data, builder_state,
                           fl2va_model=None, ref2va_model=None, external_width_overwrite=None,
                           external_height_overwrite=None, external_prompt_overwrite=None, frame_rate=24.0,
-                          internal_execute=False, clip=None, vae=None, seed=0, prompt_context=None, extra_pnginfo=None):
+                          internal_execute=False, clip=None, vae=None, seed=0, prompt_context=None, extra_pnginfo=None,
+                          audio_vae=None, external_sampler=None, external_scheduler=None, external_steps=0,
+                          external_shift_video=0.0, external_shift_audio=0.0,
+                          preview_tiny_vae=None, preview_vae=None, unique_id=None, client_id=None):
         if internal_execute:
             missing = [name for name, value in (("clip", clip), ("vae", vae)) if value is None]
             if missing:
@@ -90,7 +129,9 @@ class MiniMaxH3DirectorV2:
     def build_guide(self, mode, prompt, width, height, duration, ref_image_size, timeline_data, builder_state="",
                     fl2va_model=None, ref2va_model=None, external_width_overwrite=None,
                     external_height_overwrite=None, external_prompt_overwrite=None, frame_rate=24.0,
-                    internal_execute=False, clip=None, vae=None, seed=0, prompt_context=None, extra_pnginfo=None):
+                    internal_execute=False, clip=None, vae=None, seed=0, prompt_context=None, extra_pnginfo=None,
+                    external_sampler=None, external_scheduler=None, external_steps=0,
+                    external_shift_video=0.0, external_shift_audio=0.0):
         # Preserve direct Python callers that used the pre-builder positional model argument.
         if builder_state is not None and not isinstance(builder_state, str):
             if fl2va_model is None:
@@ -255,7 +296,11 @@ class MiniMaxH3DirectorV2:
                 raise ValueError("Director internal execution currently supports Image Inpaint only")
             if clip is None or vae is None or selected_model is None:
                 raise ValueError("Director internal execution requires model, clip, and vae")
-            execution = dict(guide["internal_execution"])
+            execution = _resolve_sampling(
+                dict(guide["internal_execution"]),
+                external_sampler, external_scheduler, external_steps,
+                external_shift_video, external_shift_audio,
+            )
             execution["postprocess_recipe"] = guide["postprocess_recipe"]
             execution["save"] = {**(execution.get("save") or {}), "output_kind": "image"}
             images = execute_image_inpaint(guide, selected_model, clip, vae, seed, execution)
@@ -284,7 +329,9 @@ class MiniMaxH3DirectorV2:
                 fl2va_model=None, ref2va_model=None, external_width_overwrite=None,
                 external_height_overwrite=None, external_prompt_overwrite=None, frame_rate=24.0,
                 internal_execute=False, clip=None, vae=None, seed=0, prompt_context=None, extra_pnginfo=None,
-                audio_vae=None):
+                audio_vae=None, external_sampler=None, external_scheduler=None, external_steps=0,
+                external_shift_video=0.0, external_shift_audio=0.0,
+                preview_tiny_vae=None, preview_vae=None, unique_id=None):
         model = self.select_execution_model(mode, fl2va_model, ref2va_model)
         execution_clip = clip
         if model is None:
@@ -298,11 +345,20 @@ class MiniMaxH3DirectorV2:
             external_prompt_overwrite, frame_rate, False, clip, vae, seed, prompt_context, extra_pnginfo,
         )
         guide = guide_result[0]
-        execution = dict(guide.get("internal_execution") or {})
+        execution = _resolve_sampling(
+            dict(guide.get("internal_execution") or {}),
+            external_sampler, external_scheduler, external_steps,
+            external_shift_video, external_shift_audio,
+        )
         execution["postprocess_recipe"] = guide.get("postprocess_recipe")
         save = dict(execution.get("save") or {})
         save["output_kind"] = "image" if mode == IMAGE_INPAINT_MODE else "video"
         execution["save"] = save
+        execution["preview_tiny_vae"] = preview_tiny_vae
+        execution["preview_vae"] = preview_vae
+        execution["unique_id"] = unique_id
+        server = getattr(PromptServer, "instance", None) if PromptServer is not None else None
+        execution["_client_id"] = getattr(server, "client_id", None) if server is not None else None
         images, audio = execute_h3(guide, model, execution_clip, vae, audio_vae, seed, execution)
         metadata = {
             "save_workflow": bool(save.get("save_workflow", True)),

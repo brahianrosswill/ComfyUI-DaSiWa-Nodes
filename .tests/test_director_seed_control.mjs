@@ -56,3 +56,29 @@ assert.match(source, /save_output/, "save options menu must retain Save output s
 assert.match(source, /save_workflow/, "save options menu must retain Embed workflow setting");
 assert.match(source, /MiniMaxH3DirectorV2/, "Director frontend must install for the new 2.0 node class");
 assert.match(source, /BigInt/, "seed values must retain the full unsigned 64-bit range");
+// ---- Workstream A: sampling panel + external sampling override sockets ----
+assert.ok(source.includes("const SAMPLER_OPTIONS = ["), "Director must define the MiniMax H3 sampler option list");
+assert.ok(source.includes("const SCHEDULER_OPTIONS = ["), "Director must define the MiniMax H3 scheduler option list");
+assert.ok(source.includes("res_multistep"), "the default MiniMax H3 sampler must be available");
+assert.ok(source.includes("updateExec = (patch)"), "sampling edits must write through updateExec into internal_execution");
+assert.ok(source.includes("s.internal_execution = next"), "updateExec must target state.internal_execution so sampling persists");
+assert.ok(source.includes("Math.max(1, Math.min(1000, Math.trunc(next.steps || 25)))"), "steps must clamp to 1..1000 with a 25 fallback");
+assert.ok(source.includes("Math.max(0, Number(next.shift_video) || 0)"), "shift_video must clamp to >= 0");
+assert.ok(source.includes("Math.max(0, Number(next.shift_audio) || 0)"), "shift_audio must clamp to >= 0");
+assert.ok(source.includes("hasExternalSampling = ()"), "Director must detect linked external sampling sockets");
+for (const socket of ["external_sampler", "external_scheduler", "external_steps", "external_shift_video", "external_shift_audio"]) {
+  assert.ok(source.includes(socket), `external sampling socket ${socket} must be checked`);
+}
+assert.ok(source.includes("External sampling connected"), "a linked sampling socket must disable the local fields with a note");
+assert.ok(source.includes('samplingPanel.querySelectorAll("select, input, button")'), "external sampling must disable the sampling controls");
+assert.ok(source.includes("const externalSamplingLinked = hasExternalSampling();"), "connection/poll changes must re-evaluate external sampling");
+// ---- Workstream B: built-in live step preview ----
+assert.ok(source.includes("PREVIEW_OPTION_FIELDS = ["), "Director must define the preview & output option fields");
+assert.ok(source.includes("live_step_preview"), "preview options must include the live step preview toggle");
+assert.ok(source.includes("preview_max_resolution"), "preview options must include a max resolution setting");
+assert.ok(source.includes("preview_frames"), "preview options must include a frame-count setting");
+assert.ok(source.includes("preview_fps"), "preview options must include a frame-rate setting");
+assert.ok(source.includes("...PREVIEW_OPTION_FIELDS"), "preview options must render inside the Preview & Output options menu");
+assert.ok(source.includes('api.addEventListener("dasiwa_director_v2_preview"'), "the live step-preview pane must subscribe to the backend preview event");
+assert.ok(source.includes("__dasiwaH3ShowStepPreview"), "preview events must route to the matching node's live slot");
+assert.ok(source.includes("step ${payload.step}/"), "the live slot must caption the current step over the total");

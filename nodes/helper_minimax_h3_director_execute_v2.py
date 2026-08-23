@@ -108,6 +108,14 @@ def execute_image_inpaint(guide, model, clip, vae, seed, settings=None):
     from nodes import VAEDecode
 
     model, clip = _apply_model_patches(model, clip, settings)
+    from .helper_minimax_h3_director_preview_v2 import attach_step_preview
+    attach_step_preview(
+        model, settings,
+        preview_tiny_vae=settings.get("preview_tiny_vae"),
+        preview_vae=settings.get("preview_vae"),
+        unique_id=settings.get("unique_id"),
+        client_id=settings.get("_client_id"),
+    )
     positive, latent = MiniMaxH3ImageToVideo.execute(
         clip, vae, guide["resolved_prompt"], int(guide["width"]), int(guide["height"]), 5,
         guide["first_frame"], None,
@@ -130,6 +138,14 @@ def execute_h3(guide, model, clip, vae, audio_vae, seed, settings=None):
     from nodes import VAEDecode
 
     model, clip = _apply_model_patches(model, clip, settings)
+    from .helper_minimax_h3_director_preview_v2 import attach_step_preview
+    attach_step_preview(
+        model, settings,
+        preview_tiny_vae=settings.get("preview_tiny_vae"),
+        preview_vae=settings.get("preview_vae"),
+        unique_id=settings.get("unique_id"),
+        client_id=settings.get("_client_id"),
+    )
     length = 5 if guide.get("mode") == "Image Inpaint" else int(guide["length"])
     if guide.get("mode") == "REF2VA":
         if audio_vae is None:
