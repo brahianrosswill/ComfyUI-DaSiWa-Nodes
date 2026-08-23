@@ -82,3 +82,5 @@ assert.ok(source.includes("...PREVIEW_OPTION_FIELDS"), "preview options must ren
 assert.ok(source.includes('api.addEventListener("dasiwa_director_v2_preview"'), "the live step-preview pane must subscribe to the backend preview event");
 assert.ok(source.includes("__dasiwaH3ShowStepPreview"), "preview events must route to the matching node's live slot");
 assert.ok(source.includes("step ${payload.step}/"), "the live slot must caption the current step over the total");
+// ---- Preview popup width ----
+assert.match(source, /\.ds-h3-preview-panel\{width:min\(400px,90vw\)/, "the media preview popup must be a third narrower (400px, was 600px)");

@@ -95,7 +95,7 @@ class MiniMaxH3DirectorV2:
                 "external_steps": ("INT", {"default": 0, "min": 0, "forceInput": True}),
                 "external_shift_video": ("FLOAT", {"default": 0.0, "min": 0.0, "forceInput": True}),
                 "external_shift_audio": ("FLOAT", {"default": 0.0, "min": 0.0, "forceInput": True}),
-                "preview_tiny_vae": ("STRING", {"default": "none", "forceInput": True, "combo": _vae_approx_options()}),
+                "preview_tiny_vae": ("STRING", {"default": "none", "combo": _vae_approx_options()}),
                 "preview_vae": ("VAE", {"lazy": True}),
             },
             "hidden": {"prompt_context": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO", "unique_id": "UNIQUE_ID"},
