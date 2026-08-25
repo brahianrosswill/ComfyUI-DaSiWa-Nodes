@@ -156,7 +156,7 @@ Disable unused slots or reduce the number of active LoRAs. Fewer slots = faster 
 | **Change slot on/off** | Click the ON/OFF column |
 | **Change LoRA** | Click the LoRA name, search to filter |
 | **Fine-tune STR/V×/A×** | Click `<` or `>` arrows (±0.05 per click) |
-| **Manual input** | Click the value pill (middle) to open an inline editor; type the value and press OK / Enter (Esc cancels) |
+| **Manual input** | Click the value pill (middle) to open an inline editor; type the value and press OK / Enter (Esc cancels). The box stays pinned next to the pill and follows pan / zoom, like native ComfyUI value editors |
 | **Cycle theme** | Click the theme button |
 | **Add slot** | Click the `+` button |
 | **Remove slot** | Click the `−` button |

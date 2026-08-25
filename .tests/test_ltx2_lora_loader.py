@@ -167,7 +167,11 @@ def test_frontend_has_mode_selector_and_disables_unavailable_audio_controls():
     assert "-5.0, 5.0" in source
     assert "openValueEditor" in source
     assert "closeValueEditor" in source
+    assert "positionValueEditor" in source
     assert "position:fixed" in source
+    assert "transform-origin:0 0" in source
+    assert "ds.offset" in source
+    assert "requestAnimationFrame(track)" in source
     assert "LoRA Strength" in source
     assert "Visual Multiplier" in source
     assert "Audio Multiplier" in source

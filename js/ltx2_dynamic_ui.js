@@ -78,20 +78,46 @@ const bump = (v, d) => Math.round(clamp((v ?? 1.0) + d, 0.0, 2.0) * 100) / 100;
 const bumpS = (v, d) => Math.round(clamp((v ?? 1.0) + d, -5.0, 5.0) * 100) / 100;
 
 // ── Inline value editor (ComfyUI-style) ──────────────────────────────────────
-// A fixed-position DOM overlay anchored at the click point: a number input
+// A DOM overlay anchored to the clicked pill in node space: a number input
 // pre-filled with the current value plus OK / Cancel. Replaces window.prompt()
-// on the STR / VIS / A pills. Theme-colored so it reads as native to the node.
+// on the STR / VIS / A pills. The box stays next to the pill, follows pan and
+// node drags, and scales with the canvas zoom (re-tracked every frame), like
+// the native ComfyUI widget value editors. Theme-colored, node-native look.
 let activeValueEditor = null;
 
+// Keep the editor pinned to its pill: client = ds.offset + ds.scale *
+// (node.pos + local anchor). Same CSS scheme as the frontend's widget DOM
+// layer (unscaled left/top + scale() from origin 0,0), so the box grows and
+// shrinks with zoom while its corner stays glued to the pill.
+function positionValueEditor(overlay) {
+  const { node, anchor, clientX, clientY } = overlay._editorOpts;
+  const c = app?.canvas;
+  if (!node?.pos || !c || !c.ds || !Array.isArray(c.ds.offset)) {
+    // View state unavailable (older builds): static placement at the click.
+    overlay.style.transform = "";
+    overlay.style.left = Math.max(4, Math.min(clientX + 10, window.innerWidth - overlay._editorWidth - 8)) + "px";
+    overlay.style.top = Math.max(4, clientY + 10) + "px";
+    return;
+  }
+  const s = c.ds.scale;
+  overlay.style.transform = "scale(" + s + ")";
+  overlay.style.left = (c.ds.offset[0] + s * (node.pos[0] + anchor[0] + overlay._editorGap)) + "px";
+  overlay.style.top = (c.ds.offset[1] + s * (node.pos[1] + anchor[1])) + "px";
+}
+
 function openValueEditor(opts) {
-  // opts: { clientX, clientY, label, value, min, max, step, theme, onCommit }
+  // opts: { node, anchor: [ax, ay] (local node px of the pill's top-right edge),
+  //         clientX, clientY (fallback when the view API is unavailable),
+  //         label, value, min, max, step, theme, onCommit }
   closeValueEditor();
   const t = opts.theme;
   const width = 150;
+  const GAP = 6; // gap between the pill edge and the editor box, in node px
 
   const overlay = document.createElement("div");
   overlay.style.cssText = [
     "position:fixed",
+    "transform-origin:0 0",
     "z-index:10003",
     "background:#0e1116",
     "border:1px solid " + t.btnBorder,
@@ -104,9 +130,6 @@ function openValueEditor(opts) {
     "font:11px 'Courier New',monospace",
     "color:" + t.btnText,
   ].join(";");
-  overlay.style.left = Math.max(4, Math.min(opts.clientX + 10, window.innerWidth - width - 8)) + "px";
-  overlay.style.top = Math.max(4, opts.clientY + 10) + "px";
-
   const title = document.createElement("div");
   title.textContent = opts.label;
   title.style.cssText = "font-size:10px;opacity:.75;";
@@ -166,8 +189,21 @@ function openValueEditor(opts) {
     else if (ev.key === "Escape") { ev.preventDefault(); close(); }
   };
 
+  overlay._editorOpts = { node: opts.node, anchor: opts.anchor, clientX: opts.clientX, clientY: opts.clientY };
+  overlay._editorWidth = width;
+  overlay._editorGap = GAP;
   activeValueEditor = overlay;
-  requestAnimationFrame(() => { inp.focus(); inp.select?.(); });
+  positionValueEditor(overlay);
+  requestAnimationFrame(() => {
+    inp.focus();
+    inp.select?.();
+    const track = () => {
+      if (!activeValueEditor || activeValueEditor !== overlay) return;
+      positionValueEditor(overlay);
+      requestAnimationFrame(track);
+    };
+    requestAnimationFrame(track);
+  });
 }
 
 function closeValueEditor() {
@@ -672,6 +708,8 @@ app.registerExtension({
           else if (x > C.stX + C.stW - 14 * s) data[i].str = bumpS(data[i].str, 0.05);
           else {
             openValueEditor({
+              node: this,
+              anchor: [C.stX + C.stW, ry + 2],
               clientX: e.clientX,
               clientY: e.clientY,
               label: "LoRA Strength (-5.0 to 5.0)",
@@ -694,6 +732,8 @@ app.registerExtension({
           else if (x > C.vX + C.vW - 10 * s) data[i].vs = bump(data[i].vs, 0.05);
           else {
             openValueEditor({
+              node: this,
+              anchor: [C.vX + C.vW, ry + 2],
               clientX: e.clientX,
               clientY: e.clientY,
               label: "Visual Multiplier (0.0 to 2.0)",
@@ -716,6 +756,8 @@ app.registerExtension({
           else if (x > C.aX + C.aW - 10 * s) data[i].as = bump(data[i].as, 0.05);
           else {
             openValueEditor({
+              node: this,
+              anchor: [C.aX + C.aW, ry + 2],
               clientX: e.clientX,
               clientY: e.clientY,
               label: "Audio Multiplier (0.0 to 2.0)",
