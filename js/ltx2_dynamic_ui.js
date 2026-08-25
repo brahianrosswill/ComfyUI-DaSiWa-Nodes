@@ -77,6 +77,107 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const bump = (v, d) => Math.round(clamp((v ?? 1.0) + d, 0.0, 2.0) * 100) / 100;
 const bumpS = (v, d) => Math.round(clamp((v ?? 1.0) + d, -5.0, 5.0) * 100) / 100;
 
+// ── Inline value editor (ComfyUI-style) ──────────────────────────────────────
+// A fixed-position DOM overlay anchored at the click point: a number input
+// pre-filled with the current value plus OK / Cancel. Replaces window.prompt()
+// on the STR / VIS / A pills. Theme-colored so it reads as native to the node.
+let activeValueEditor = null;
+
+function openValueEditor(opts) {
+  // opts: { clientX, clientY, label, value, min, max, step, theme, onCommit }
+  closeValueEditor();
+  const t = opts.theme;
+  const width = 150;
+
+  const overlay = document.createElement("div");
+  overlay.style.cssText = [
+    "position:fixed",
+    "z-index:10003",
+    "background:#0e1116",
+    "border:1px solid " + t.btnBorder,
+    "border-radius:4px",
+    "padding:6px 8px",
+    "display:flex",
+    "flex-direction:column",
+    "gap:5px",
+    "box-shadow:0 6px 18px #000",
+    "font:11px 'Courier New',monospace",
+    "color:" + t.btnText,
+  ].join(";");
+  overlay.style.left = Math.max(4, Math.min(opts.clientX + 10, window.innerWidth - width - 8)) + "px";
+  overlay.style.top = Math.max(4, opts.clientY + 10) + "px";
+
+  const title = document.createElement("div");
+  title.textContent = opts.label;
+  title.style.cssText = "font-size:10px;opacity:.75;";
+  overlay.append(title);
+
+  const row = document.createElement("div");
+  row.style.cssText = "display:flex;gap:6px;align-items:center;";
+
+  const inp = document.createElement("input");
+  inp.type = "number";
+  inp.step = String(opts.step ?? 0.01);
+  inp.min = String(opts.min);
+  inp.max = String(opts.max);
+  inp.value = String(opts.value);
+  inp.style.cssText =
+    "width:" + (width - 90) + "px;background:#1a1f27;border:1px solid " + t.btnBorder +
+    ";color:" + t.btnText + ";padding:3px 5px;font:11px 'Courier New',monospace;";
+  row.append(inp);
+
+  const okBtn = document.createElement("button");
+  okBtn.textContent = "OK";
+  okBtn.style.cssText =
+    "background:" + t.btnBg + ";border:1px solid " + t.btnBorder + ";color:" + t.btnText +
+    ";padding:3px 8px;border-radius:3px;cursor:pointer;font:11px 'Courier New',monospace;";
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.textContent = "✕";
+  cancelBtn.style.cssText =
+    "background:transparent;border:1px solid " + t.arrowColor + ";color:" + t.btnText +
+    ";padding:3px 6px;border-radius:3px;cursor:pointer;font:11px 'Courier New',monospace;";
+  row.append(okBtn, cancelBtn);
+  overlay.append(row);
+  document.body.append(overlay);
+
+  const commit = raw => {
+    const parsed = parseFloat(raw);
+    if (Number.isNaN(parsed)) { close(); return; }
+    const clamped = Math.min(opts.max, Math.max(opts.min, parsed));
+    opts.onCommit(clamped);
+    close();
+  };
+  const close = () => {
+    document.removeEventListener("mousedown", onDocDown, { capture: true });
+    overlay.remove();
+    if (activeValueEditor === overlay) activeValueEditor = null;
+  };
+  const onDocDown = ev => {
+    if (!overlay.contains(ev.target)) close();
+  };
+  document.addEventListener("mousedown", onDocDown, { capture: true });
+  overlay._docDown = onDocDown;
+
+  okBtn.onclick = () => commit(inp.value);
+  cancelBtn.onclick = close;
+  inp.onkeydown = ev => {
+    if (ev.key === "Enter") { ev.preventDefault(); commit(inp.value); }
+    else if (ev.key === "Escape") { ev.preventDefault(); close(); }
+  };
+
+  activeValueEditor = overlay;
+  requestAnimationFrame(() => { inp.focus(); inp.select?.(); });
+}
+
+function closeValueEditor() {
+  if (!activeValueEditor) return;
+  const el = activeValueEditor;
+  activeValueEditor = null;
+  if (el._docDown) document.removeEventListener("mousedown", el._docDown, { capture: true });
+  el.remove();
+}
+
 async function getCurrentLoraList(nodeData) {
   const fallback = nodeData?.input?.hidden?.available_loras?.[0] || ["None"];
 
