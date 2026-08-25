@@ -170,7 +170,9 @@ def test_frontend_has_mode_selector_and_disables_unavailable_audio_controls():
     assert "positionValueEditor" in source
     assert "position:fixed" in source
     assert "transform-origin:0 0" in source
-    assert "ds.offset" in source
+    assert "_viewState" in source
+    assert "getBoundingClientRect" in source
+    assert "graph-canvas" in source
     assert "requestAnimationFrame(track)" in source
     assert "LoRA Strength" in source
     assert "Visual Multiplier" in source

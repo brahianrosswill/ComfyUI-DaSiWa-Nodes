@@ -85,24 +85,55 @@ const bumpS = (v, d) => Math.round(clamp((v ?? 1.0) + d, -5.0, 5.0) * 100) / 100
 // the native ComfyUI widget value editors. Theme-colored, node-native look.
 let activeValueEditor = null;
 
-// Keep the editor pinned to its pill: client = ds.offset + ds.scale *
-// (node.pos + local anchor). Same CSS scheme as the frontend's widget DOM
-// layer (unscaled left/top + scale() from origin 0,0), so the box grows and
-// shrinks with zoom while its corner stays glued to the pill.
+// Keep the editor pinned to its pill, mirroring the frontend's own widget
+// DOM layer. The core's zoom helper gives the view law for this build:
+//   graph = client/scale - ds.offset  =>  client = rect + scale*(graph + offset)
+// (rect = canvas element's page position). So:
+//   left/top    = rect + scale * (node.pos + anchor + gap + offset)   (client px)
+//   transform   = scale(z), transform-origin 0 0
+// The box corner stays glued to the pill through pan / zoom / node drags
+// (re-tracked every frame) and grows/shrinks with the zoom level. The
+// offset is always INSIDE the scale factor — adding it outside throws the
+// box off by (scale - 1) * offset on any pan.
+//
+// View state is looked up defensively (property names differ between
+// litegraph builds: canvas.ds / canvas.view / graph.view). The host element
+// is the graph canvas's own HTMLCanvasElement (canvas.canvas) — NOT a bare
+// document.querySelector("canvas"), which in a ComfyUI page grabs the first
+// media-preview <canvas> and throws the whole position off. If we can't
+// resolve a reliable host we bail to the click fallback rather than risk a
+// wrong-canvas position.
+function _viewState() {
+  const lg = app?.canvas || app?.graph?.canvas || window.litegraph?.canvas;
+  const view = lg?.ds || lg?.view || app?.graph?.view;
+  if (!view) return null;
+  const scale = view.scale;
+  const off = view.offset;
+  if (!(scale > 0) || typeof off?.[0] !== "number" || typeof off?.[1] !== "number") return null;
+  const host =
+    lg?.canvas ||
+    document.getElementById("graph-canvas");
+  if (!host?.getBoundingClientRect) return null;
+  const rect = host.getBoundingClientRect();
+  if (rect.width < 1) return null; // detached / hidden (view-mode switch)
+  return { scale, offset: off, left: rect.left, top: rect.top };
+}
+
 function positionValueEditor(overlay) {
   const { node, anchor, clientX, clientY } = overlay._editorOpts;
-  const c = app?.canvas;
-  if (!node?.pos || !c || !c.ds || !Array.isArray(c.ds.offset)) {
-    // View state unavailable (older builds): static placement at the click.
+  const v = _viewState();
+  if (!node?.pos || !v) {
+    // View state unavailable: static placement at the original click.
     overlay.style.transform = "";
     overlay.style.left = Math.max(4, Math.min(clientX + 10, window.innerWidth - overlay._editorWidth - 8)) + "px";
     overlay.style.top = Math.max(4, clientY + 10) + "px";
     return;
   }
-  const s = c.ds.scale;
-  overlay.style.transform = "scale(" + s + ")";
-  overlay.style.left = (c.ds.offset[0] + s * (node.pos[0] + anchor[0] + overlay._editorGap)) + "px";
-  overlay.style.top = (c.ds.offset[1] + s * (node.pos[1] + anchor[1])) + "px";
+  const z = v.scale;
+  overlay.style.left =
+    (v.left + z * (node.pos[0] + anchor[0] + overlay._editorGap + v.offset[0])) + "px";
+  overlay.style.top = (v.top + z * (node.pos[1] + anchor[1] + v.offset[1])) + "px";
+  overlay.style.transform = "scale(" + z + ")";
 }
 
 function openValueEditor(opts) {
