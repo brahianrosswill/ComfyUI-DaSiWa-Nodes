@@ -564,6 +564,7 @@ app.registerExtension({
       const W = this.size[0];
       const H = this.size[1];
       const s = W / 1000;
+      const t = THEMES[this.properties.theme || "a"];
 
       const BTN_H = 16;
       const BTN_Y = 40;
@@ -670,8 +671,23 @@ app.registerExtension({
           if (x < C.stX + 14 * s) data[i].str = bumpS(data[i].str, -0.05);
           else if (x > C.stX + C.stW - 14 * s) data[i].str = bumpS(data[i].str, 0.05);
           else {
-            const v = prompt("LoRA Strength:", data[i].str ?? 1);
-            if (v !== null) data[i].str = clamp(parseFloat(v) || 0, -5, 5);
+            openValueEditor({
+              clientX: e.clientX,
+              clientY: e.clientY,
+              label: "LoRA Strength (-5.0 to 5.0)",
+              value: data[i].str ?? 1,
+              min: -5,
+              max: 5,
+              step: 0.01,
+              theme: t,
+              onCommit: v => {
+                data[i].str = Math.round(v * 100) / 100;
+                this.properties.stack_data = JSON.stringify(data);
+                sync(this);
+                this.setDirtyCanvas(true);
+              },
+            });
+            return true;
           }
         } else if (x > C.vX && x < C.vX + C.vW) {
           if (x < C.vX + 10 * s) data[i].vs = bump(data[i].vs, -0.05);
