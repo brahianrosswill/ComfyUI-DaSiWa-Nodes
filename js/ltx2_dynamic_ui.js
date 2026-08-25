@@ -693,15 +693,45 @@ app.registerExtension({
           if (x < C.vX + 10 * s) data[i].vs = bump(data[i].vs, -0.05);
           else if (x > C.vX + C.vW - 10 * s) data[i].vs = bump(data[i].vs, 0.05);
           else {
-            const v = prompt("V Multiplier (0–2):", data[i].vs ?? 1);
-            if (v !== null) data[i].vs = clamp(parseFloat(v) || 0, 0, 2);
+            openValueEditor({
+              clientX: e.clientX,
+              clientY: e.clientY,
+              label: "Visual Multiplier (0.0 to 2.0)",
+              value: data[i].vs ?? 1,
+              min: 0,
+              max: 2,
+              step: 0.01,
+              theme: t,
+              onCommit: v => {
+                data[i].vs = Math.round(v * 100) / 100;
+                this.properties.stack_data = JSON.stringify(data);
+                sync(this);
+                this.setDirtyCanvas(true);
+              },
+            });
+            return true;
           }
         } else if (hasSeparatedAudio(this.properties.model_type) && x > C.aX && x < C.aX + C.aW) {
           if (x < C.aX + 10 * s) data[i].as = bump(data[i].as, -0.05);
           else if (x > C.aX + C.aW - 10 * s) data[i].as = bump(data[i].as, 0.05);
           else {
-            const v = prompt("A Multiplier (0–2):", data[i].as ?? 1);
-            if (v !== null) data[i].as = clamp(parseFloat(v) || 0, 0, 2);
+            openValueEditor({
+              clientX: e.clientX,
+              clientY: e.clientY,
+              label: "Audio Multiplier (0.0 to 2.0)",
+              value: data[i].as ?? 1,
+              min: 0,
+              max: 2,
+              step: 0.01,
+              theme: t,
+              onCommit: v => {
+                data[i].as = Math.round(v * 100) / 100;
+                this.properties.stack_data = JSON.stringify(data);
+                sync(this);
+                this.setDirtyCanvas(true);
+              },
+            });
+            return true;
           }
         }
 
