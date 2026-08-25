@@ -165,7 +165,13 @@ def test_frontend_has_mode_selector_and_disables_unavailable_audio_controls():
     assert "toggleAll" in source
     assert "ALL✓" in source
     assert "-5.0, 5.0" in source
-    assert "clamp(parseFloat(v) || 0, -5, 5)" in source
+    assert "openValueEditor" in source
+    assert "closeValueEditor" in source
+    assert "position:fixed" in source
+    assert "LoRA Strength" in source
+    assert "Visual Multiplier" in source
+    assert "Audio Multiplier" in source
+    assert "onCommit" in source
     assert '"H3: keys TBD"' not in source
     assert "Audio separation awaits published MiniMax H3 tensor keys" not in source
 
