@@ -213,8 +213,8 @@ function installStyles() {
        up with the ASPECT/RESOLUTION/INPUT SCALING dropdowns. */
     .ds-h3-res-numwrap{display:flex;align-items:stretch;flex:1;min-width:0}
     .ds-h3-res-numwrap .ds-h3-res-num{flex:1;min-width:0;width:auto;height:34px;border-top-right-radius:0;border-bottom-right-radius:0}
-    .ds-h3-res-spin{flex:0 0 30px;box-sizing:border-box;display:flex;flex-direction:column;border:1px solid #2f5478;border-left:none;border-radius:0 5px 5px 0;overflow:hidden}
-    .ds-h3-res-spinbtn{flex:1;display:flex;align-items:center;justify-content:center;border:none;background:#16283a;color:#d6ebff;font:11px system-ui,sans-serif;cursor:pointer;padding:0;user-select:none;appearance:none;-webkit-appearance:none;transition:background .08s,color .08s}
+    .ds-h3-res-spin{flex:0 0 24px;box-sizing:border-box;display:flex;flex-direction:column;border:1px solid #2f5478;border-left:none;border-radius:0 5px 5px 0;overflow:hidden}
+    .ds-h3-res-spinbtn{flex:1;display:flex;align-items:center;justify-content:center;border:none;background:#16283a;color:#d6ebff;font:9px system-ui,sans-serif;cursor:pointer;padding:0;user-select:none;appearance:none;-webkit-appearance:none;transition:background .08s,color .08s}
     .ds-h3-res-spinbtn+.ds-h3-res-spinbtn{border-top:1px solid #2f5478}
     .ds-h3-res-spinbtn:hover{background:#3f79b4;color:#fff}
     /* Random|Fixed as ONE switch: a single segmented pill with two segments,
