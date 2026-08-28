@@ -9,7 +9,7 @@ import pytest
 
 from nodes.helper_minimax_h3_director import (
     audio_duration, load_audio, load_embedded_video_audio, load_video,
-    scale_canvas_to_short_edge, scale_input_media,
+    normalize_guide, scale_canvas_to_short_edge, scale_input_media,
 )
 from nodes.helper_minimax_h3_prompt_builder import (
     PROMPT_MODES, build_base_prompt, build_prompt, build_ref_prompt, default_builder_state,
@@ -729,3 +729,24 @@ def test_load_video_falls_back_to_container_duration_when_stream_duration_is_mis
     frames = load_video("durationless.mp4", str(tmp_path), target_fps=1)
 
     assert frames.shape[0] == 3
+
+
+def test_v1_normalizer_accepts_image_inpaint_with_single_first_frame():
+    state = normalize_guide({"mode": "Image Inpaint", "width": 1024, "height": 1024,
+                             "length": 5, "first_frame": "img", "last_frame": None})
+    assert state.mode == "Image Inpaint"
+    assert state.first_frame == "img"
+    assert state.last_frame is None
+    assert state.length == 5
+    assert state.ref_images == {} and state.ref_videos == {} and state.ref_audios == {}
+
+
+def test_v1_normalizer_rejects_image_inpaint_with_references():
+    with pytest.raises(ValueError, match="no video/audio references"):
+        normalize_guide({"mode": "Image Inpaint", "first_frame": "img",
+                         "ref_images": {"ref_image_1": "x"}})
+
+
+def test_v1_normalizer_rejects_image_inpaint_without_first_frame():
+    with pytest.raises(ValueError, match="requires one image keyframe"):
+        normalize_guide({"mode": "Image Inpaint", "first_frame": None})
