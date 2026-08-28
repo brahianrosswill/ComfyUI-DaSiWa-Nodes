@@ -17,21 +17,29 @@ from PIL import Image
 # `import nodes.X` ever happens. Relative imports inside the loaded modules
 # (.helper_logging, .tiny_vae, ...) resolve through the synthetic package's
 # __path__, which points at the real nodes/ directory.
-_REPO_ROOT = Path(__file__).resolve().parents[1]
-_NODES_DIR = _REPO_ROOT / "nodes"
+# frozen/director_v2/ is outside the repo root; parents[2] is the repo root.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_REPO_NODES_DIR = _REPO_ROOT / "nodes"
+_FROZEN_DIR = _REPO_ROOT / "frozen" / "director_v2"
+# The v2 modules live in frozen/director_v2/; their relative imports
+# (.helper_logging, .nodes_scaling, .tiny_vae, ...) reach the shared
+# modules through the synthetic package's __path__, which lists both
+# directories: frozen/director_v2/ first so the v2 modules resolve, then
+# nodes/ for the shared helpers they pull in.
+_NODES_DIR = [_FROZEN_DIR, _REPO_NODES_DIR]
 _PKG = "dasiwa_director_v2_nodes_pkg"
 
 
 def _load_repo_module(name):
-    """Load nodes/<name>.py under the synthetic package (idempotent)."""
+    """Load a v2 module from frozen/director_v2/ under the synthetic package (idempotent)."""
     if _PKG not in sys.modules:
         pkg = types.ModuleType(_PKG)
-        pkg.__path__ = [str(_NODES_DIR)]
+        pkg.__path__ = [str(_FROZEN_DIR), str(_REPO_NODES_DIR)]
         sys.modules[_PKG] = pkg
     module_name = f"{_PKG}.{name}"
     if module_name in sys.modules:
         return sys.modules[module_name]
-    spec = importlib.util.spec_from_file_location(module_name, _NODES_DIR / f"{name}.py")
+    spec = importlib.util.spec_from_file_location(module_name, _FROZEN_DIR / f"{name}.py")
     module = importlib.util.module_from_spec(spec)
     module.__package__ = _PKG
     sys.modules[module_name] = module

@@ -1,9 +1,26 @@
-"""Contracts for Director-owned publication through the existing saver nodes."""
+"""Contracts for Director-owned publication through the existing saver nodes.
+
+Frozen: this test targets the frozen Director 2.0 backend module, which now
+lives beside this file in frozen/director_v2/ rather than under nodes/.
+"""
+import importlib.util
+from pathlib import Path
+
+_HERE = Path(__file__).resolve().parent
+
+
+def _load(name):
+    spec = importlib.util.spec_from_file_location(name, _HERE / f"{name}.py")
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+publish_media_output = _load("helper_media_output_v2").publish_media_output
 
 
 def test_image_publication_uses_metadata_saver_and_passes_automatic_metadata():
-    from nodes.helper_media_output_v2 import publish_media_output
-
     calls = []
 
     class Saver:
@@ -33,8 +50,6 @@ def test_image_publication_uses_metadata_saver_and_passes_automatic_metadata():
 
 
 def test_video_publication_reuses_enhanced_video_combine_with_automatic_metadata():
-    from nodes.helper_media_output_v2 import publish_media_output
-
     calls = []
 
     class Combine:

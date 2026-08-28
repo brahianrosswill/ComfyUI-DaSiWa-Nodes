@@ -13,7 +13,6 @@ if __package__:
     from .nodes.nodes_inpaint import DaSiWa_InpaintCropPrep, DaSiWa_InpaintComposite
     from .nodes.nodes_enhanced_video_combine import DaSiWa_EnhancedVideoCombine
     from .nodes.nodes_minimax_h3_director import MiniMaxH3Director
-    from .nodes.nodes_minimax_h3_director_v2 import MiniMaxH3DirectorV2
     from .nodes.nodes_minimax_h3_director_guide import MiniMaxH3DirectorGuide
     from .nodes.nodes_minimax_h3_cache import MiniMaxH3Cache
 
@@ -42,7 +41,6 @@ if __package__:
         "DaSiWa_InpaintCropPrep": DaSiWa_InpaintCropPrep,
         "DaSiWa_InpaintComposite": DaSiWa_InpaintComposite,
         "MiniMaxH3Director": MiniMaxH3Director,
-        "MiniMaxH3DirectorV2": MiniMaxH3DirectorV2,
         "MiniMaxH3DirectorGuide": MiniMaxH3DirectorGuide,
         "MiniMaxH3Cache": MiniMaxH3Cache,
 
@@ -69,7 +67,6 @@ if __package__:
         "DaSiWa_InpaintCropPrep": "DaSiWa Inpaint Crop Prep",
         "DaSiWa_InpaintComposite": "DaSiWa Inpaint Composite",
         "MiniMaxH3Director": "MiniMax H3 Director",
-        "MiniMaxH3DirectorV2": "MiniMax H3 Director 2.0",
         "MiniMaxH3DirectorGuide": "MiniMax H3 Director Guide",
         "MiniMaxH3Cache": "MiniMax H3 Cache",
 

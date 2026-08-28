@@ -27,6 +27,8 @@ Timeline-based authoring for MiniMax H3 text/image/video generation and referenc
 - **PASTE-REPLACE:** Ctrl+V onto a selected media tile replaces that tile in place, preserving its slot position instead of appending.
 - **EXTERNAL OVERWRITE INPUTS:** optional `external_prompt_overwrite` (STRING) replaces the assembled builder output; connect both `external_width_overwrite` and `external_height_overwrite` (INT) to replace the Director canvas and bypass its sizing and input preprocessing entirely.
 
+> **Note — Director 2.0 is frozen.** The self-contained **Director 2.0** variant (in-node sampling/decode/output execution, the **Sampling** row with external override sockets, and the built-in live step preview) is **no longer shipped** in this nodepack and its development is paused. That code is preserved under [`frozen/director_v2/`](frozen/director_v2/) for future revival. This release ships the **MiniMax H3 Director** (timeline authoring) + the **Guide** node.
+
 [Full documentation, UI guide, and prompting reference →](docs/minimax_h3_director.md)
 
 ### ⚡ MiniMax H3 Cache

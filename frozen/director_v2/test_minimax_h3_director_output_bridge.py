@@ -1,9 +1,12 @@
-"""Regression checks for Director Image Inpaint without hidden graph bridges."""
+"""Regression checks for Director Image Inpaint without hidden graph bridges.
+
+Frozen: targets the frozen Director 2.0 frontend, which now lives beside this
+file in frozen/director_v2/ rather than under js/.
+"""
 from pathlib import Path
 
-
-ROOT = Path(__file__).resolve().parent.parent
-JS = ROOT / "js" / "minimax_h3_director_v2.js"
+_HERE = Path(__file__).resolve().parent
+JS = _HERE / "minimax_h3_director_v2.js"
 
 
 def source():

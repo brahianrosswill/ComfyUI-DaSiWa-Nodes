@@ -7,8 +7,12 @@ text boxes must therefore persist their height in the per-node install closure
 """
 from pathlib import Path
 
-V1 = Path(__file__).resolve().parent.parent / "js" / "minimax_h3_director.js"
-V2 = Path(__file__).resolve().parent.parent / "js" / "minimax_h3_director_v2.js"
+# This test lives under frozen/director_v2/; the repo root is three levels up
+# (frozen/director_v2 -> frozen -> <repo>), and the shipped v1 JS sits in
+# <repo>/js while the frozen v2 JS sits beside this test.
+_ROOT = Path(__file__).resolve().parents[2]
+V1 = _ROOT / "js" / "minimax_h3_director.js"
+V2 = Path(__file__).resolve().parent / "minimax_h3_director_v2.js"
 
 # (key, "fieldKey: \"<key>\"") — all ten form-builder call sites in BOTH files.
 ALL_KEYS = (

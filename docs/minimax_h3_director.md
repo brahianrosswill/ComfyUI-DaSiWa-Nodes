@@ -8,6 +8,8 @@ Since the last GitHub release (August 2026):
 
 ### New features
 
+> **Director 2.0 (frozen):** the two items tagged **_Director 2.0 — frozen_** below belong to the self-contained Director 2.0 variant, which is no longer shipped in this nodepack. That code is preserved under [`frozen/director_v2/`](../../frozen/director_v2/) and its development is paused; the shipped Director (this doc) is the timeline-authoring node + Guide node.
+
 - **Simple / Structured prompt-mode toggle:** a mode-bar switch changes how builder fields assemble into the final prompt — **Structured** keeps the labelled sections (headers added upstream), **Simple** renders one flat, header-less block. Persisted in `builder_state` (`prompt_mode`), restored on load, honored by **Preview Prompt**; defaults to Structured for backward compatibility.
 - **Grouped column dropdowns:** Aspect / Resolution / Input scaling now render as grouped, ascending columns (aspect by orientation, resolution by ###p / MP tier) with the auto options relabelled **Native (ShortEdge 768px)** (Resolution) and **Native (ShortEdge 2048px)** (Input scaling); menus clamp to the node viewport and scroll natively with the mouse wheel.
 - **Frame rate:** new `frame_rate` FLOAT input (0.1–240, default 24) sets the output FPS and is emitted as a `frame_rate` output for downstream nodes to read; the legacy `external_prompt` input was dropped in favour of `external_prompt_overwrite`.
@@ -25,8 +27,8 @@ Since the last GitHub release (August 2026):
 - **Video thumbnail previews:** every uploaded video now extracts its first frame and displays it as a background behind the clip tile, replacing the generic icon. Makes it easy to tell references apart without opening each one.
 - **Cleaner toolbar:** consolidated into a single horizontal row with mode buttons on the left and Clear/Remove/? controls on the right; removed redundant bubble elements and pulsing glows for a quieter interface.
 - **Dark-blue audio lane accent:** distinguishes the audio lane visually from the Image/Video lane and the green "+ empty-slot" indicators.
-- **Sampling controls + external override sockets:** a new **Sampling** row exposes `sampler`, `scheduler`, `steps`, `shift_video` and `shift_audio` (persisted into the hidden `internal_execution` block, round-tripped through `timeline_data`). Five optional inputs (`external_sampler`, `external_scheduler`, `external_steps`, `external_shift_video`, `external_shift_audio`) let another node override them; precedence is external > internal > built-in default, and a connected socket disables the local fields with an "external sampling connected" note.
-- **Built-in live step preview:** the Director now decodes per-step frames itself (no KJ preview node needed) and streams them into its own **Preview & Output** panel. Toggle and limits live in the ☰ *Preview & Output options* menu: **live step preview** (default on, true bypass when off), **max resolution** (default 1024 px), **frames** (1 = still JPEG, >1 = animated WebP or NVENC H.264 MP4) and **fps**. Decoding precedence: `preview_tiny_vae` widget (a `models/vae_approx` combo rendered like a plain model selector — the Director's JS strips the optional socket's ring so no input dot shows, e.g. `taeh3.safetensors`, the H3 tiny decoder core's VAELoader cannot build) > `preview_vae` socket (full-quality `vae.decode()`) > core previewer > latent-to-RGB fallback. The media preview popup is a third narrower than before (400 px instead of 600 px).
+- **Sampling controls + external override sockets _(Director 2.0 — frozen)_:** a new **Sampling** row exposes `sampler`, `scheduler`, `steps`, `shift_video` and `shift_audio` (persisted into the hidden `internal_execution` block, round-tripped through `timeline_data`). Five optional inputs (`external_sampler`, `external_scheduler`, `external_steps`, `external_shift_video`, `external_shift_audio`) let another node override them; precedence is external > internal > built-in default, and a connected socket disables the local fields with an "external sampling connected" note. Shipped only by the frozen Director 2.0 — not part of the current Director + Guide workflow.
+- **Built-in live step preview _(Director 2.0 — frozen)_:** the Director now decodes per-step frames itself (no KJ preview node needed) and streams them into its own **Preview & Output** panel. Toggle and limits live in the ☰ *Preview & Output options* menu: **live step preview** (default on, true bypass when off), **max resolution** (default 1024 px), **frames** (1 = still JPEG, >1 = animated WebP or NVENC H.264 MP4) and **fps**. Decoding precedence: `preview_tiny_vae` widget (a `models/vae_approx` combo rendered like a plain model selector — the Director's JS strips the optional socket's ring so no input dot shows, e.g. `taeh3.safetensors`, the H3 tiny decoder core's VAELoader cannot build) > `preview_vae` socket (full-quality `vae.decode()`) > core previewer > latent-to-RGB fallback. The media preview popup is a third narrower than before (400 px instead of 600 px).
 
 ### Earlier additions
 
@@ -373,11 +375,15 @@ Three rules keep the chain valid:
 2. **One loader per model, in mode order.** `select_execution_model` picks `ref2va_model` for REF2VA and `fl2va_model` otherwise; the active input must be connected (the unconnected twin may stay empty).
 3. **Type-safe wires.** ComfyUI only lets you connect type-compatible sockets, so `LoRA.MODEL → Director.fl2va_model` is legal but `LoRA.MODEL → Director.clip` is not. No name or type resolution happens at runtime — the socket you plugged in arrives as the keyword-argument named for that socket.
 
-### Sampling settings
+### Sampling settings _(Director 2.0 — frozen)_
+
+> Frozen with Director 2.0 — this section describes the self-contained variant's in-node sampling. The shipped Director + Guide workflow delegates sampling to the downstream ComfyUI H3 sampler; see [`frozen/director_v2/`](../../frozen/director_v2/).
 
 The five sampling fields (`sampler`, `scheduler`, `steps`, `shift_video`, `shift_audio`) live in the **Sampling** row of the node and persist in `internal_execution` (round-tripped through `timeline_data`), surviving reloads. Backend precedence: **external socket > internal UI value > built-in default** (`res_multistep` / `simple` / 25 / 11 / 4). Connect an `external_*` sampling input to override from another node; an empty/zero external value falls back to the internal value, and a connected socket disables the local fields with a note.
 
-### Built-in live step preview
+### Built-in live step preview _(Director 2.0 — frozen)_
+
+> Frozen with Director 2.0 — the built-in per-step decode/preview path belongs to the self-contained variant and is not part of the shipped Director + Guide workflow.
 
 The Director decodes per-step denoising frames itself and streams them into its own **Preview & Output** panel — no preview node is required, and the default ComfyUI previewer (`--preview-method`) needs no enabling: the wrapper is independent of it.
 

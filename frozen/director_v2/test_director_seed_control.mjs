@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const source = await readFile(new URL("../js/minimax_h3_director_v2.js", import.meta.url), "utf8");
+const source = await readFile(new URL("./minimax_h3_director_v2.js", import.meta.url), "utf8");
 assert.match(source, /seed_control/, "seed-control state must persist with the Director workflow");
 assert.match(source, /Random/, "seed control must offer Random mode");
 assert.match(source, /Fixed/, "seed control must offer Fixed mode");

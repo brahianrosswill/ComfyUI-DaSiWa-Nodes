@@ -1,8 +1,25 @@
-"""Contract tests for Director-owned Image Inpaint execution."""
-from nodes.helper_minimax_h3_director_execute_v2 import (
-    DEFAULT_POSTPROCESS_RECIPE,
-    normalize_postprocess_recipe,
-)
+"""Contract tests for Director-owned Image Inpaint execution.
+
+Frozen: this test targets the frozen Director 2.0 backend module, which now
+lives beside this file in frozen/director_v2/ rather than under nodes/.
+"""
+import importlib.util
+from pathlib import Path
+
+_HERE = Path(__file__).resolve().parent
+
+
+def _load(name):
+    spec = importlib.util.spec_from_file_location(name, _HERE / f"{name}.py")
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+mod = _load("helper_minimax_h3_director_execute_v2")
+DEFAULT_POSTPROCESS_RECIPE = mod.DEFAULT_POSTPROCESS_RECIPE
+normalize_postprocess_recipe = mod.normalize_postprocess_recipe
 
 
 def test_recipe_defaults_are_disabled_and_stably_ordered():
