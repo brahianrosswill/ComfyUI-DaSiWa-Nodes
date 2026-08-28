@@ -839,7 +839,7 @@ function install(node) {
   const replace = (id, value) => mutate(s => { const x = s.items.find(i => i.id === id); if (x) x.value = value; });
   const resolutionState = () => ({ aspect: "auto", resolution: "auto", input_scaling: "Auto", custom_aspect_w: 16, custom_aspect_h: 9, custom_mp: 1, custom_width: 1344, custom_height: 768, ...(state.resolution || {}) });
   const snap16 = value => Math.max(MINIMAX_MULTIPLE, Math.round(Number(value) / MINIMAX_MULTIPLE) * MINIMAX_MULTIPLE);
-  const sourceDimensions = () => activeItems().filter(item => (item.type === "image" || item.type === "video") && Number(item.source_width) > 0 && Number(item.source_height) > 0).sort((a, b) => a.order - b.order)[0];
+  const sourceDimensions = () => activeItems().filter(item => (item.type === "image" || item.type === "video") && Number(item.source_width) > 0 && Number(item.source_height) > 0).sort((a, b) => (Number(a.slot) || 0) - (Number(b.slot) || 0) || a.order - b.order)[0];
   const selectedAspect = settings => {
     if (settings.aspect === "auto") { const source = sourceDimensions(); return source ? Number(source.source_width) / Number(source.source_height) : 4 / 3; }
     if (settings.aspect === "custom") return Math.max(1, Number(settings.custom_aspect_w) || 16) / Math.max(1, Number(settings.custom_aspect_h) || 9);
