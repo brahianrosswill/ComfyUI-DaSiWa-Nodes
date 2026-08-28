@@ -65,7 +65,7 @@ def test_director_output_contract_remains_original():
 
     assert MiniMaxH3Director.RETURN_NAMES == (
         "guide", "duration", "positive_prompt", "width", "height", "model",
-        "fl2va_requested", "ref2va_requested", "frame_rate",
+        "fl2va_requested", "inpaint_requested", "frame_rate",
     )
     assert MiniMaxH3Director.RETURN_TYPES[-1] == "FLOAT"
     assert "images" not in MiniMaxH3Director.INPUT_TYPES()["optional"]

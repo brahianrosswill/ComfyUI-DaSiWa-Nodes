@@ -47,7 +47,7 @@ class MiniMaxH3Director:
         }
 
     RETURN_TYPES = ("MINIMAX_H3_DIRECTOR_GUIDE", "INT", "STRING", "INT", "INT", "MODEL", "BOOLEAN", "BOOLEAN", "FLOAT")
-    RETURN_NAMES = ("guide", "duration", "positive_prompt", "width", "height", "model", "fl2va_requested", "ref2va_requested", "frame_rate")
+    RETURN_NAMES = ("guide", "duration", "positive_prompt", "width", "height", "model", "fl2va_requested", "inpaint_requested", "frame_rate")
     FUNCTION = "build_guide"
     CATEGORY = "DaSiWa/MiniMax H3"
 
@@ -220,7 +220,7 @@ class MiniMaxH3Director:
         normalize_guide(guide)
         selected_model = ref2va_model if mode == "REF2VA" else fl2va_model
         log_dasiwa("MiniMax H3 Director", f"mode={mode}; requested_model={'ref2va_model' if mode == 'REF2VA' else 'fl2va_model'}; passed_model={_describe_model(selected_model)}; canvas={width}x{height}; frames={length}; fps={frame_rate}; refs=images:{len(ref_images)},videos:{len(ref_videos)},video_audio:{len(ref_video_audios)},audio:{len(ref_audios)}; timeline_items={len(items)}")
-        return guide, length, resolved, int(width), int(height), selected_model, mode in BASE_MODES or mode == "Image Inpaint", mode == "REF2VA", frame_rate
+        return guide, length, resolved, int(width), int(height), selected_model, mode in BASE_MODES or mode == "Image Inpaint", mode == "Image Inpaint", frame_rate
 
 
 NODE_CLASS_MAPPINGS = {"MiniMaxH3Director": MiniMaxH3Director}

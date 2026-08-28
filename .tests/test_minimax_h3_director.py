@@ -86,7 +86,7 @@ def test_director_emits_v2_consolidated_prompt_for_i2va_builder_state():
     builder = default_builder_state("I2VA")
     builder.update({"imd": "A bright room.", "soundscape": "birds", "music": "N/A"})
 
-    guide, _, resolved, _, _, _, fl2va_requested, ref2va_requested, _ = director.MiniMaxH3Director().build_guide(
+    guide, _, resolved, _, _, _, fl2va_requested, inpaint_requested, _ = director.MiniMaxH3Director().build_guide(
         "I2VA", "legacy", 1344, 768, 5, "match", json.dumps(state), json.dumps(builder)
     )
 
@@ -95,7 +95,7 @@ def test_director_emits_v2_consolidated_prompt_for_i2va_builder_state():
     assert guide["last_frame"] is None
     assert guide["prompt_payload"]["full_prompt"] == resolved
     assert "integrated_multimodal_description: A bright room." in resolved
-    assert fl2va_requested and not ref2va_requested
+    assert fl2va_requested and not inpaint_requested
 
 
 def test_director_blank_external_prompt_falls_back_to_builder():
@@ -755,14 +755,14 @@ def test_v1_normalizer_rejects_image_inpaint_without_first_frame():
 def test_director_builds_image_inpaint_guide():
     timeline = json.dumps({"items": [{"id": "a", "type": "image", "slot": 0, "order": 0, "value": "in.png"}],
                            "prompt_blocks": []})
-    guide, length, resolved, w, h, model, fl2va_req, ref2va_req, fps = director.MiniMaxH3Director().build_guide(
+    guide, length, resolved, w, h, model, fl2va_req, inpaint_req, fps = director.MiniMaxH3Director().build_guide(
         "Image Inpaint", "p", 768, 768, 5, "match", timeline, "", fl2va_model="M")
     assert guide["mode"] == "Image Inpaint"
     assert guide["length"] == 5
     assert guide["first_frame"] == "in.png"
     assert guide["last_frame"] is None
     assert length == 5
-    assert fl2va_req is True and ref2va_req is False
+    assert fl2va_req is True and inpaint_req is True
     assert model == "M"
 
 
@@ -802,3 +802,21 @@ def test_director_v1_ui_exposes_image_inpaint_mode():
 
     assert '"T2VA", "I2VA", "FL2VA", "L2VA", "REF2VA", "Image Inpaint"' in source
     assert 'mode() === "Image Inpaint"' in source
+
+
+def test_director_exposes_inpaint_requested_instead_of_ref2va_requested():
+    node = director.MiniMaxH3Director()
+
+    assert node.RETURN_NAMES == (
+        "guide", "duration", "positive_prompt", "width", "height", "model",
+        "fl2va_requested", "inpaint_requested", "frame_rate",
+    )
+
+    inpaint = node.build_guide("Image Inpaint", "", 1024, 1024, 5, "match",
+                               json.dumps({"items": [{"type": "image", "value": "a.png", "slot": 0}]}))
+    base = node.build_guide("FL2VA", "", 1024, 1024, 5, "match", json.dumps({"items": []}))
+    ref = node.build_guide("REF2VA", "", 1024, 1024, 5, "match", json.dumps({"items": []}))
+
+    assert inpaint[7] is True
+    assert base[7] is False
+    assert ref[7] is False
