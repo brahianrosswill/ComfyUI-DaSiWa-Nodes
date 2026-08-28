@@ -774,3 +774,24 @@ def test_director_rejects_image_inpaint_without_exactly_one_image():
     with pytest.raises(ValueError, match="requires exactly one enabled image reference"):
         director.MiniMaxH3Director().build_guide("Image Inpaint", "p", 768, 768, 5, "match",
                                                   json.dumps({"items": [], "prompt_blocks": []}), "")
+
+
+def test_guider_routes_image_inpaint_to_5frame_image_to_video(monkeypatch):
+    calls = []
+
+    class NativeImageToVideo:
+        @staticmethod
+        def execute(*args):
+            calls.append(args)
+            return ["conditioning"], {"samples": np.zeros((1, 2, 3))}
+
+    monkeypatch.setattr(director_guide, "_native_node", lambda _name: NativeImageToVideo)
+    guide = {"version": 2, "mode": "Image Inpaint", "width": 768, "height": 768,
+             "length": 5, "first_frame": "img", "resolved_prompt": "p"}
+
+    positive, latent = director_guide.MiniMaxH3DirectorGuide().apply(object(), object(), guide)
+
+    assert positive == ["conditioning"]
+    assert latent["samples"].shape == (1, 2, 3)
+    # native call: (clip, vae, prompt, width, height, 5, first_frame, None)
+    assert calls[0][2:] == ("p", 768, 768, 5, "img", None)
