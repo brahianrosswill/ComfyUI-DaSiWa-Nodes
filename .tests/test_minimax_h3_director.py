@@ -750,3 +750,27 @@ def test_v1_normalizer_rejects_image_inpaint_with_references():
 def test_v1_normalizer_rejects_image_inpaint_without_first_frame():
     with pytest.raises(ValueError, match="requires one image keyframe"):
         normalize_guide({"mode": "Image Inpaint", "first_frame": None})
+
+
+def test_director_builds_image_inpaint_guide():
+    timeline = json.dumps({"items": [{"id": "a", "type": "image", "slot": 0, "order": 0, "value": "in.png"}],
+                           "prompt_blocks": []})
+    guide, length, resolved, w, h, model, fl2va_req, ref2va_req, fps = director.MiniMaxH3Director().build_guide(
+        "Image Inpaint", "p", 768, 768, 5, "match", timeline, "", fl2va_model="M")
+    assert guide["mode"] == "Image Inpaint"
+    assert guide["length"] == 5
+    assert guide["first_frame"] == "in.png"
+    assert guide["last_frame"] is None
+    assert length == 5
+    assert fl2va_req is True and ref2va_req is False
+    assert model == "M"
+
+
+def test_director_rejects_image_inpaint_without_exactly_one_image():
+    timeline = json.dumps({"items": [{"id": "a", "type": "video", "slot": 0, "order": 0, "value": "v.mp4"}],
+                           "prompt_blocks": []})
+    with pytest.raises(ValueError, match="accepts image references only"):
+        director.MiniMaxH3Director().build_guide("Image Inpaint", "p", 768, 768, 5, "match", timeline, "")
+    with pytest.raises(ValueError, match="requires exactly one enabled image reference"):
+        director.MiniMaxH3Director().build_guide("Image Inpaint", "p", 768, 768, 5, "match",
+                                                  json.dumps({"items": [], "prompt_blocks": []}), "")
