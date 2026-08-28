@@ -6,11 +6,12 @@ A high-performance collection of custom nodes for ComfyUI, optimized for video w
 
 ### 🎬 MiniMax H3 Director
 
-Timeline-based authoring for MiniMax H3 text/image/video generation and reference-to-video workflows, integrated with ComfyUI's native H3 implementation. Two lanes (Image/Video + Audio), slot-based layout, drag-and-drop / paste / upload, per-clip trims, and structured prompt builders per mode.
+Timeline-based authoring for MiniMax H3 text/image/video generation, reference-to-video, and single-image inpainting workflows, integrated with ComfyUI's native H3 implementation. Two lanes (Image/Video + Audio), slot-based layout, drag-and-drop / paste / upload, per-clip trims, and structured prompt builders per mode.
 
 ![MiniMax H3 Director](assets/DaSiWa-MiniMaxH3-Director.png)
 
 - **FL2VA mode:** text-to-video (T2VA), first-frame (I2VA), or first+last frame interpolation; up to 2 image slots; automatic alignment-line insertion in the prompt.
+- **IMAGE INPAINT mode:** exactly one image reference, no video/audio; a 5-frame image-to-video pass through the native `MiniMaxH3ImageToVideo` node with the single image as keyframe — the output is a one-frame batch you extract your single result from with a **Get Image from Batch**. The mode emits an `inpaint_requested` output so you can switch sampling paths by mode, and the Guide node routes it to the native image-to-video call with the image as first frame and no last frame.
 - **REF2VA mode:** up to 9 images, 3 videos, 3 audio clips, 12 files total; each video has a compact V / A / V+A switch (Video only / Audio only / Video+embedded-audio) using the same trim range for both streams; standalone audio also supports left/right trim handles.
 - **REFERENCE VIDEO THUMBNAILS:** uploaded videos show their actual first frame as a background preview behind each clip tile, making it easy to identify references at a glance.
 - **REFERENCE HANDLING:** reorder clips by dragging between slots, attach external soundtracks to videos, crop references visually via draggable markers, preserve incompatible media when toggling FL2VA ↔ REF2VA instead of losing assets.
@@ -19,15 +20,13 @@ Timeline-based authoring for MiniMax H3 text/image/video generation and referenc
   - FL2VA/I2VA/L2VA/T2VA: guided fields for integrated_multimodal_description, overall_soundscape, and non_diegetic_music with automatic alignment headers.
   - REF2VA: simplified six-section free-text builder (subject_definitions, summary, retention_analysis, detailed_description, overall_soundscape, non_diegetic_music) with helper buttons: **Insert [Shot N]** places shot markers at cursor, **Prefill Labels & Summary** auto-generates Picture/Video/Audio labels from your inserted media, and **Preview Prompt** shows the exact assembled prompt in a popup with copy-to-clipboard.
 - **VALIDATED LIMITS:** 2–15 second reference windows; max 15s combined visual and audio duration each; strict path-safety under ComfyUI's input directory.
-- **NATIVE ROUTING & LAZY LOADING:** hands validated data to ComfyUI's built-in MiniMaxH3ImageToVideo / MiniMaxH3ReferenceToVideo nodes; only the selected FL2VA or REF2VA model is requested.
+- **NATIVE ROUTING & LAZY LOADING:** hands validated data to ComfyUI's built-in MiniMaxH3ImageToVideo / MiniMaxH3ReferenceToVideo nodes (Image Inpaint uses the image-to-video node); only the selected FL2VA or REF2VA model is requested.
 - **RESOLUTION PANEL:** Aspect / Resolution / Input scaling selectors (all default to **Auto**) drive the output canvas on MiniMax's 16-px grid — Auto aspect follows your first visual reference, Auto resolution sets a 768 px short side, plus fixed aspect, MP and pixel presets with CUSTOM values. The dropdowns are grouped in columns (aspect by orientation, resolution by ###p / MP, ascending) and label the auto options **Native (ShortEdge 768px)** / **Native (ShortEdge 2048px)**. Input scaling (Off / Auto / Target / Fit / Fill / Fit+pad / Divisible crop) preprocesses visual references via the included Torch Resize before they reach H3.
 - **PROMPT MODE TOGGLE:** a Simple / Structured switch in the mode bar changes how builder fields are assembled into the final prompt — Structured keeps the labelled sections, Simple renders one flat block. The choice is persisted in the workflow and honored by **Preview Prompt**.
 - **FRAME RATE:** a `frame_rate` FLOAT input (0.1–240, default 24) sets the output FPS and is also emitted as a `frame_rate` output so downstream nodes can read the effective value.
 - **CROP PREVIEW:** a ▶ Play crop button previews only the current crop range, and the preview crop range itself is draggable for quick scrubbing.
 - **PASTE-REPLACE:** Ctrl+V onto a selected media tile replaces that tile in place, preserving its slot position instead of appending.
 - **EXTERNAL OVERWRITE INPUTS:** optional `external_prompt_overwrite` (STRING) replaces the assembled builder output; connect both `external_width_overwrite` and `external_height_overwrite` (INT) to replace the Director canvas and bypass its sizing and input preprocessing entirely.
-
-> **Note — Director 2.0 is frozen.** The self-contained **Director 2.0** variant (in-node sampling/decode/output execution, the **Sampling** row with external override sockets, and the built-in live step preview) is **no longer shipped** in this nodepack and its development is paused. That code is preserved under [`frozen/director_v2/`](frozen/director_v2/) for future revival. This release ships the **MiniMax H3 Director** (timeline authoring) + the **Guide** node.
 
 [Full documentation, UI guide, and prompting reference →](docs/minimax_h3_director.md)
 

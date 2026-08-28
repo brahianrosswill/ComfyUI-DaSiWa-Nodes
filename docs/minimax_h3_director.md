@@ -8,8 +8,7 @@ Since the last GitHub release (August 2026):
 
 ### New features
 
-> **Director 2.0 (frozen):** the two items tagged **_Director 2.0 — frozen_** below belong to the self-contained Director 2.0 variant, which is no longer shipped in this nodepack. That code is preserved under [`frozen/director_v2/`](../../frozen/director_v2/) and its development is paused; the shipped Director (this doc) is the timeline-authoring node + Guide node.
-
+- **Image Inpaint mode:** a new **Image Inpaint** mode alongside FL2VA / REF2VA — exactly one image reference (no video/audio) run through the native `MiniMaxH3ImageToVideo` node as a 5-frame image-to-video pass with the image as keyframe; extract the single result with a **Get Image from Batch**. The Director emits an `inpaint_requested` output (the old `ref2va_requested` socket was renamed) so downstream sampling can branch on mode, and the Guide routes the mode to the native image-to-video call (first frame set, last frame `None`).
 - **Simple / Structured prompt-mode toggle:** a mode-bar switch changes how builder fields assemble into the final prompt — **Structured** keeps the labelled sections (headers added upstream), **Simple** renders one flat, header-less block. Persisted in `builder_state` (`prompt_mode`), restored on load, honored by **Preview Prompt**; defaults to Structured for backward compatibility.
 - **Grouped column dropdowns:** Aspect / Resolution / Input scaling now render as grouped, ascending columns (aspect by orientation, resolution by ###p / MP tier) with the auto options relabelled **Native (ShortEdge 768px)** (Resolution) and **Native (ShortEdge 2048px)** (Input scaling); menus clamp to the node viewport and scroll natively with the mouse wheel.
 - **Frame rate:** new `frame_rate` FLOAT input (0.1–240, default 24) sets the output FPS and is emitted as a `frame_rate` output for downstream nodes to read; the legacy `external_prompt` input was dropped in favour of `external_prompt_overwrite`.
@@ -27,8 +26,6 @@ Since the last GitHub release (August 2026):
 - **Video thumbnail previews:** every uploaded video now extracts its first frame and displays it as a background behind the clip tile, replacing the generic icon. Makes it easy to tell references apart without opening each one.
 - **Cleaner toolbar:** consolidated into a single horizontal row with mode buttons on the left and Clear/Remove/? controls on the right; removed redundant bubble elements and pulsing glows for a quieter interface.
 - **Dark-blue audio lane accent:** distinguishes the audio lane visually from the Image/Video lane and the green "+ empty-slot" indicators.
-- **Sampling controls + external override sockets _(Director 2.0 — frozen)_:** a new **Sampling** row exposes `sampler`, `scheduler`, `steps`, `shift_video` and `shift_audio` (persisted into the hidden `internal_execution` block, round-tripped through `timeline_data`). Five optional inputs (`external_sampler`, `external_scheduler`, `external_steps`, `external_shift_video`, `external_shift_audio`) let another node override them; precedence is external > internal > built-in default, and a connected socket disables the local fields with an "external sampling connected" note. Shipped only by the frozen Director 2.0 — not part of the current Director + Guide workflow.
-- **Built-in live step preview _(Director 2.0 — frozen)_:** the Director now decodes per-step frames itself (no KJ preview node needed) and streams them into its own **Preview & Output** panel. Toggle and limits live in the ☰ *Preview & Output options* menu: **live step preview** (default on, true bypass when off), **max resolution** (default 1024 px), **frames** (1 = still JPEG, >1 = animated WebP or NVENC H.264 MP4) and **fps**. Decoding precedence: `preview_tiny_vae` widget (a `models/vae_approx` combo rendered like a plain model selector — the Director's JS strips the optional socket's ring so no input dot shows, e.g. `taeh3.safetensors`, the H3 tiny decoder core's VAELoader cannot build) > `preview_vae` socket (full-quality `vae.decode()`) > core previewer > latent-to-RGB fallback. The media preview popup is a third narrower than before (400 px instead of 600 px).
 
 ### Earlier additions
 
@@ -61,7 +58,7 @@ Since the last GitHub release (August 2026):
 ## Quick overview
 
 - One node holds all your references, trims, ordering, endpoint frames, and prompts.
-- Two modes: FL2VA (text/image endpoints) and REF2VA (multi-image/video/audio references).
+- Five endpoint modes — T2VA, I2VA, L2VA, FL2VA (text/image endpoints, up to 2 frame slots) and REF2VA (multi-image/video/audio references) — plus **Image Inpaint** (exactly one image, single-frame output).
 - Two timeline lanes: Image/Video + Audio. Click a lane to select it; paste / drop media there.
 - Per-video stream switch: choose Video only, Audio only, or Video+embedded-audio with identical trim ranges.
 - Standalone audio clips can be trimmed with left/right handles just like video.
@@ -73,7 +70,7 @@ Since the last GitHub release (August 2026):
 - Mode-specific prompt builders:
   - FL2VA/I2VA/L2VA/T2VA: guided fields for description and audio sections with automatic alignment headers.
   - REF2VA: six free-text sections (subject_definitions, summary, retention_analysis, detailed_description, overall_soundscape, non_diegetic_music) with helper buttons — Insert Shot, Prefill Labels & Summary, and Preview Prompt.
-- Only the selected FL2VA or REF2VA model is loaded; the Guide node calls ComfyUI's built-in H3 nodes.
+- Only the selected model is loaded: `ref2va_model` for REF2VA, `fl2va_model` for all image-to-video modes (FL2VA family + Image Inpaint); the Guide node calls ComfyUI's built-in H3 nodes.
 
 ## Installation and graph setup
 
@@ -185,6 +182,17 @@ Use when you want the generated video to borrow identity, appearance, motion, co
 
 When a video provides audio (via A/V+A or attached soundtrack), that audio becomes `<Audio N>` in the reference numbering. Embedded audio and separate soundtracks share the same time crop as the host video frames.
 
+### Image Inpaint (single image)
+
+Use to produce a single refined/edited frame from exactly one image reference — a still, not a video.
+
+- Exactly **one** image reference; video and audio files are rejected (a video/audio in the timeline is a hard error).
+- The single image is scaled by the Input Scaling setting, then run through the native `MiniMaxH3ImageToVideo` node as a **5-frame** image-to-video pass with the image as keyframe and no last frame.
+- The Guide node routes the mode to that native call (`first_frame` set, `last_frame = None`), emitting `positive` (conditioning) + `latent`.
+- The output is a **one-frame batch**: feed the latent into a sampler/decoder, then use a **Get Image from Batch** node to extract the single result image.
+- The Director emits an `inpaint_requested` output (true in this mode, false in all others) so a graph can branch sampling/decode paths by mode. The `fl2va_requested` output is also true for every image-to-video mode (FL2VA family + Image Inpaint).
+- The resolution panel still applies (canvas drives width/height); frame rate does not (output is a single frame).
+
 ## UI walkthrough: controls and buttons
 
 Open the node and read top-to-bottom.
@@ -192,9 +200,10 @@ Open the node and read top-to-bottom.
 ### Toolbar row
 
 - **Title label:** "MiniMax H3 Director"
-- **Model Mode buttons (left):** T2VA, I2VA, FL2VA, L2VA, REF2VA shown as small pills. Active mode has purple highlight; click to switch modes. When switching modes:
+- **Model Mode buttons (left):** T2VA, I2VA, FL2VA, L2VA, REF2VA, Image Inpaint shown as small pills. Active mode has purple highlight; click to switch modes. When switching modes:
   - Going to FL2VA hides non-image references but keeps them in memory so they reappear when you switch back.
   - Going to REF2VA restores all previously added media.
+  - Going to Image Inpaint requires exactly one image; video/audio are blocked and the audio lane is disabled.
 - **Prompt Mode toggle:** a **Simple** / **Structured** pair next to the mode buttons switches how builder fields assemble into the final prompt (Structured keeps the labelled sections, Simple renders one flat block). The selection is persisted and restored on load.
 - **Clear button:** always visible; removes all media and prompts from the timeline. With no content it is dimmed and reports "Nothing to clear." instead of clearing.
 - **Remove button:** appears when a clip is selected; deletes that item.
@@ -315,10 +324,11 @@ Understanding the data path makes wiring and debugging easier.
 
 On queue, the Director executes this sequence:
 
-1. Reads current mode (FL2VA or REF2VA).
+1. Reads current mode (FL2VA-family, REF2VA, or Image Inpaint).
 2. Iterates over all enabled timeline items in slot order.
    - For FL2VA: keeps only image items (max 2); discards others temporarily.
    - For REF2VA: processes images, videos, and audio respecting slot limits.
+   - For Image Inpaint: accepts exactly one image reference; video/audio items are a hard error.
 3. Loads each asset:
    - Images → resized tensors.
    - Videos → decoded to `frame_rate` fps frame batches (default 24), cropped according to trim_start/trim_end.
@@ -351,11 +361,12 @@ The Guide is a thin adapter between your authored timeline and ComfyUI's native 
    - For REF2VA: wraps the six user-written sections with their standard headers (`subject_definitions:`, `summary:`, etc.). Legacy v1 structured-builder data is merged automatically if present.
    - Writes the result as `resolved_prompt`.
 3. Routes to the appropriate native node:
-   - FL2VA → calls `MiniMaxH3ImageToVideo` with endpoint frames and prompt.
+   - FL2VA / I2VA / L2VA / T2VA → calls `MiniMaxH3ImageToVideo` with endpoint frames and prompt.
+   - Image Inpaint → calls `MiniMaxH3ImageToVideo` with the single image as first frame, `last_frame = None`, and a fixed 5-frame length.
    - REF2VA → calls `MiniMaxH3ReferenceToVideo` with all reference maps and prompt.
 4. Emits standard ComfyUI outputs:
    - `positive` (conditioning)
-   - `latent` (image batch)
+   - `latent` (image batch — a one-frame batch for Image Inpaint; extract the result with **Get Image from Batch**)
    - These feed downstream samplers and decoders exactly like any other H3 workflow.
 
 You never call the native MiniMax H3 nodes directly when using Director+Guide; the Guide abstracts that away.
@@ -372,25 +383,8 @@ Checkpoint.CLIP  → LoRALoader.clip  → Director.clip
 Three rules keep the chain valid:
 
 1. **Forward chain only — never a loop.** A patcher's output feeds *into* the Director's model input; it must never come back out of the Director. The Director is a terminal media node (it emits `frame_rate`, `duration`, `images`, never `MODEL`), and a wire from the Director back into its own model input would be a graph `dependency_cycle`, which ComfyUI's validation rejects.
-2. **One loader per model, in mode order.** `select_execution_model` picks `ref2va_model` for REF2VA and `fl2va_model` otherwise; the active input must be connected (the unconnected twin may stay empty).
+2. **One loader per model, in mode order.** The Director picks `ref2va_model` for REF2VA and `fl2va_model` otherwise; the active input must be connected (the unconnected twin may stay empty).
 3. **Type-safe wires.** ComfyUI only lets you connect type-compatible sockets, so `LoRA.MODEL → Director.fl2va_model` is legal but `LoRA.MODEL → Director.clip` is not. No name or type resolution happens at runtime — the socket you plugged in arrives as the keyword-argument named for that socket.
-
-### Sampling settings _(Director 2.0 — frozen)_
-
-> Frozen with Director 2.0 — this section describes the self-contained variant's in-node sampling. The shipped Director + Guide workflow delegates sampling to the downstream ComfyUI H3 sampler; see [`frozen/director_v2/`](../../frozen/director_v2/).
-
-The five sampling fields (`sampler`, `scheduler`, `steps`, `shift_video`, `shift_audio`) live in the **Sampling** row of the node and persist in `internal_execution` (round-tripped through `timeline_data`), surviving reloads. Backend precedence: **external socket > internal UI value > built-in default** (`res_multistep` / `simple` / 25 / 11 / 4). Connect an `external_*` sampling input to override from another node; an empty/zero external value falls back to the internal value, and a connected socket disables the local fields with a note.
-
-### Built-in live step preview _(Director 2.0 — frozen)_
-
-> Frozen with Director 2.0 — the built-in per-step decode/preview path belongs to the self-contained variant and is not part of the shipped Director + Guide workflow.
-
-The Director decodes per-step denoising frames itself and streams them into its own **Preview & Output** panel — no preview node is required, and the default ComfyUI previewer (`--preview-method`) needs no enabling: the wrapper is independent of it.
-
-- **Toggle:** **live step preview** in the ☰ *Preview & Output options* menu (default on). When off the backend skips the whole decode path (no tiny-VAE decode, no `send_sync`) — a true bypass, not just a hidden pane.
-- **Limits:** `preview_max_resolution` (default 1024 px, 0 = full), `preview_frames` (1 = still JPEG; >1 = animated WebP, or NVENC H.264 MP4 when PyAV probes NVENC), `preview_fps` (default 12).
-- **Decoder precedence:** `preview_tiny_vae` combo widget (a `models/vae_approx` filename selector, e.g. `taeh3.safetensors` — the special H3 tiny decoder that core's `VAELoader` cannot build; rendered like a model selector, no input ring on the node edge) > `preview_vae` input socket (full-quality `vae.decode()`) > core latent previewer > latent-to-RGB fallback. The tiny-VAE path clamps output before uint8 because taeh3 output is not [0,1]-guaranteed. Implementation note: the widget must stay a **bare-list combo spec** — `(_vae_approx_options(), {"default": "none", ...})`, the same shape as core `VAELoader.vae_name`. The legacy `("STRING", {"combo": [...]})` tuple renders as a free-text field (no dropdown) in frontend v1.49.x. The hollow optional-input ring is removed **client-side**: the Director's JS (`install()` in `js/minimax_h3_director_v2.js`, run on node create + workflow load) sets the `preview_tiny_vae` socket's `shape = null` — a bare-list combo that is *optional* would otherwise draw a `HollowCircle` ring, while core's *required* `VAELoader.vae_name` draws none. A backend `socketless: True` option-dict key is ineffective on the legacy `INPUT_TYPES` path in v1.49.x (the frontend's `socketless` gate reads `widget.options`, which `addComboWidget` only ever populates with `{values, advanced, hidden}`), so the ring strip is the only reliable mechanism.
-- **KJ alternative:** a KJ `ModelPreviewOverrideKJ` in the chain remains a valid external preview. Because KJ's preview is a native `OUTER_SAMPLE` model wrapper — not a DOM hook on the graph sampler — its own widget also animates during the Director's internal-execution runs. Canonical wiring is unchanged: `Settings.MODEL → KJ.model → KJ.MODEL → Director.ref2va_model`.
 
 ## Dense prompting guide
 
