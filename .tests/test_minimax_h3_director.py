@@ -795,3 +795,10 @@ def test_guider_routes_image_inpaint_to_5frame_image_to_video(monkeypatch):
     assert latent["samples"].shape == (1, 2, 3)
     # native call: (clip, vae, prompt, width, height, 5, first_frame, None)
     assert calls[0][2:] == ("p", 768, 768, 5, "img", None)
+
+
+def test_director_v1_ui_exposes_image_inpaint_mode():
+    source = Path("js/minimax_h3_director.js").read_text()
+
+    assert '"T2VA", "I2VA", "FL2VA", "L2VA", "REF2VA", "Image Inpaint"' in source
+    assert 'mode() === "Image Inpaint"' in source
