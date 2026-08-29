@@ -226,6 +226,9 @@ def test_frontend_has_mode_selector_and_disables_unavailable_audio_controls():
     source = (Path(__file__).parents[1] / "js" / "advanced_lora_loader_ui.js").read_text(encoding="utf-8")
 
     assert "MODEL_TYPES" in source
+    assert "use_cache" in source
+    assert "syncCacheWidget" in source
+    assert "CONTROL_DESCRIPTIONS.cache" in source
     assert '"MiniMax H3 (prepared)"' not in source
     assert "hasSeparatedAudio" in source
     assert "syncModeWidget" in source

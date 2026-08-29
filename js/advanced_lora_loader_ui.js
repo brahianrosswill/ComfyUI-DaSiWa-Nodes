@@ -275,6 +275,7 @@ const CONTROL_DESCRIPTIONS = {
   video: "Visual multiplier. In Basic mode it controls the full LoRA map, including image models. Effective visual strength = STR x VIS. Range: 0.0 to 2.0.",
   audio: "Audio branch multiplier. Effective audio strength = STR x A. Range: 0.0 to 2.0.",
   keys: "Detected LoRA key counts for video and audio branches.",
+  cache: "Activate ComfyUI-side caching of the loaded LoRA file + metadata. Off by default; when on, each unique file is read once instead of once per slot.",
 };
 
 function setCanvasTooltip(text) {
@@ -353,6 +354,7 @@ app.registerExtension({
         );
       }
       if (!this.properties.theme) this.properties.theme = "a";
+      if (this.properties.use_cache === undefined) this.properties.use_cache = false;   // default off
       if (!MODEL_TYPES.includes(this.properties.model_type)) this.properties.model_type = "Basic";
       const rows = JSON.parse(this.properties.stack_data);
       this.size = [720, calcHeight(rows.length)];
@@ -371,7 +373,12 @@ app.registerExtension({
           this.setDirtyCanvas(true);
         }, { values: MODEL_TYPES });
       }
-      this.widgets = [hideWidget(stackWidget), hideWidget(modeWidget)];
+      let cacheWidget = this.widgets?.find(widget => widget.name === "use_cache");
+      if (!cacheWidget) cacheWidget = this.addWidget("boolean", "use_cache", this.properties.use_cache, value => {
+        this.properties.use_cache = value;
+        this.setDirtyCanvas(true);
+      });
+      this.widgets = [hideWidget(stackWidget), hideWidget(modeWidget), hideWidget(cacheWidget)];
     };
 
     nodeType.prototype.getExtraMenuOptions = function () {
@@ -386,6 +393,11 @@ app.registerExtension({
     const syncModeWidget = node => {
       const w = node.widgets.find(widget => widget.name === "model_type");
       if (w) w.value = node.properties.model_type;
+    };
+
+    const syncCacheWidget = node => {
+      const w = node.widgets.find(widget => widget.name === "use_cache");
+      if (w) w.value = node.properties.use_cache;
     };
 
     const getTooltipAt = (node, local_pos) => {
@@ -410,9 +422,11 @@ app.registerExtension({
       const minusX = plusX + BTN_H + 2;
       const allW = 40;
       const allX = btnX - allW - 4;
+      const cacheW = 56, cacheX = allX - cacheW - 4;
 
       if (y > 20 && y < 36 && x > btnX && x < btnX + btnW) return CONTROL_DESCRIPTIONS.mode;
       if (y > BTN_Y && y < BTN_Y + BTN_H) {
+        if (x > cacheX && x < cacheX + cacheW) return CONTROL_DESCRIPTIONS.cache;
         if (x > allX && x < allX + allW) return CONTROL_DESCRIPTIONS.toggleAll;
         if (x > btnX && x < btnX + btnW) return CONTROL_DESCRIPTIONS.theme;
         if (x > plusX && x < plusX + BTN_H) return CONTROL_DESCRIPTIONS.add;
@@ -460,6 +474,7 @@ app.registerExtension({
       const H = this.size[1];
       sync(this);
       syncModeWidget(this);
+      syncCacheWidget(this);
       const modelType = this.properties.model_type || "Basic";
       const audioEnabled = hasSeparatedAudio(modelType);
 
@@ -520,6 +535,21 @@ app.registerExtension({
       ctx.font = "bold 7px 'Courier New',monospace";
       ctx.textAlign = "center";
       ctx.fillText(`⬡ THEME: ${t.name} ▶`, btnX + btnW / 2, BTN_Y + 10);
+      ctx.textAlign = "left";
+
+      // Cache toggle (opt-in, default off)
+      const cacheW = 56, cacheX = allX - cacheW - 4;
+      ctx.fillStyle = this.properties.use_cache ? t.onColor + "22" : t.btnBg;
+      ctx.beginPath();
+      ctx.roundRect(cacheX, BTN_Y, cacheW, BTN_H, 3);
+      ctx.fill();
+      ctx.strokeStyle = this.properties.use_cache ? t.onColor : t.arrowColor;
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
+      ctx.fillStyle = this.properties.use_cache ? t.onColor : t.arrowColor;
+      ctx.font = "bold 7px 'Courier New',monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(this.properties.use_cache ? "⚡ CACHE ✓" : "⚡ CACHE", cacheX + cacheW / 2, BTN_Y + 10);
       ctx.textAlign = "left";
 
       // + button
@@ -641,6 +671,7 @@ app.registerExtension({
       const btnW = 110, btnX = (W - btnW) / 2;
       const plusX = btnX + btnW + 4;
       const allW = 40, allX = btnX - allW - 4;
+      const cacheW = 56, cacheX = allX - cacheW - 4;
 
       const modeW = 150, modeX = (W - modeW) / 2;
       if (y > 20 && y < 36 && x > modeX && x < modeX + modeW) {
@@ -661,6 +692,13 @@ app.registerExtension({
         data.forEach(row => { row.on = toggleAll; });
         this.properties.stack_data = JSON.stringify(data);
         sync(this);
+        this.setDirtyCanvas(true);
+        return true;
+      }
+
+      if (y > BTN_Y && y < BTN_Y + BTN_H && x > cacheX && x < cacheX + cacheW) {
+        this.properties.use_cache = !this.properties.use_cache;
+        syncCacheWidget(this);
         this.setDirtyCanvas(true);
         return true;
       }
