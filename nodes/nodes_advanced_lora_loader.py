@@ -1,4 +1,4 @@
-"""DaSiWa Advanced LoRA Loader - universal LoRA stacker.
+"""Advanced LoRA Loader - universal LoRA stacker.
 
 The loader supports ordinary image/video LoRAs plus LTX-2.3's separate video
 and audio branches. Each of the 10 slots has:
@@ -104,14 +104,14 @@ async def keycounts(request):
 
 
 # ── Node ──────────────────────────────────────────────────────────────────────
-class DaSiWa_LTX2LoraLoader:
+class DaSiWa_AdvancedLoRALoader:
     """
-    DaSiWa Advanced LoRA Loader
+    Advanced LoRA Loader
 
     10-slot LoRA stacker for ordinary image/video LoRAs and LTX-2.3 workflows.
     """
     DESCRIPTION = (
-        "DaSiWa Advanced LoRA Loader: stacks ordinary image/video LoRAs or LTX-2.3 "
+        "Advanced LoRA Loader: stacks ordinary image/video LoRAs or LTX-2.3 "
         "video/audio LoRAs. Audio separation is available only for LTX-2.3."
     )
 

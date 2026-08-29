@@ -1,14 +1,14 @@
-# DaSiWa LTX-2 Master Loader
+# Advanced LoRA Loader
 
 **Category:** `loaders/lora`  
-**Class name:** `DaSiWa_LTX2LoraLoader`  
-**File:** `nodes/nodes_ltx2_loader.py` · `js/ltx2_dynamic_ui.js`
+**Class name:** `DaSiWa_AdvancedLoRALoader` (serialized node ID: `DaSiWa_LTX2LoraLoader`, unchanged for workflow compatibility)  
+**File:** `nodes/nodes_advanced_lora_loader.py` · `js/advanced_lora_loader_ui.js`
 
 ---
 
 ## Overview
 
-The **DaSiWa LTX-2 Lora Loader** is a 10-slot LoRA stacker designed specifically for LTX-2.3 workflows. LTX-2.3 is unique because it generates **both video and audio** from a single model using completely separate transformer branches. This node exploits that architecture to give you independent control over how LoRAs affect video and audio generation.
+The **Advanced LoRA Loader** is a 10-slot LoRA stacker designed specifically for LTX-2.3 workflows. LTX-2.3 is unique because it generates **both video and audio** from a single model using completely separate transformer branches. This node exploits that architecture to give you independent control over how LoRAs affect video and audio generation.
 
 Each slot lets you:
 - **STR** — Master LoRA strength (works like any normal LoRA loader, −2.0 to +2.0)

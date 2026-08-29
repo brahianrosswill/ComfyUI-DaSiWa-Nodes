@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 
-MODULE_PATH = Path(__file__).parents[1] / "nodes" / "nodes_ltx2_loader.py"
+MODULE_PATH = Path(__file__).parents[1] / "nodes" / "nodes_advanced_lora_loader.py"
 PACKAGE_PATH = Path(__file__).parents[1] / "__init__.py"
 
 
@@ -51,7 +51,7 @@ def loader_module(monkeypatch):
     }.items():
         monkeypatch.setitem(sys.modules, name, module)
 
-    spec = importlib.util.spec_from_file_location("nodes_ltx2_loader_under_test", MODULE_PATH)
+    spec = importlib.util.spec_from_file_location("nodes_advanced_lora_loader_under_test", MODULE_PATH)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -59,21 +59,21 @@ def loader_module(monkeypatch):
 
 
 def test_schema_exposes_the_universal_model_type_selector(loader_module):
-    controls = loader_module.DaSiWa_LTX2LoraLoader.INPUT_TYPES()["required"]
+    controls = loader_module.DaSiWa_AdvancedLoRALoader.INPUT_TYPES()["required"]
 
     assert controls["model_type"][0] == [
         "Basic",
         "LTX-2.3",
     ]
     assert controls["model_type"][1]["default"] == "Basic"
-    assert loader_module.DaSiWa_LTX2LoraLoader.CATEGORY == "DaSiWa/loaders/lora"
+    assert loader_module.DaSiWa_AdvancedLoRALoader.CATEGORY == "DaSiWa/loaders/lora"
 
 
 def test_package_keeps_node_id_and_uses_universal_display_name():
     source = PACKAGE_PATH.read_text(encoding="utf-8")
 
     assert '"DaSiWa_LTX2LoraLoader"' in source
-    assert '"DaSiWa Advanced LoRA Loader"' in source
+    assert '"Advanced LoRA Loader"' in source
 
 
 def test_basic_mode_applies_every_weight_once(loader_module, tmp_path, monkeypatch):
@@ -154,7 +154,7 @@ def test_ltx23_separates_audio_keys_and_applies_independent_strengths(loader_mod
 
 
 def test_frontend_has_mode_selector_and_disables_unavailable_audio_controls():
-    source = (Path(__file__).parents[1] / "js" / "ltx2_dynamic_ui.js").read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "js" / "advanced_lora_loader_ui.js").read_text(encoding="utf-8")
 
     assert "MODEL_TYPES" in source
     assert '"MiniMax H3 (prepared)"' not in source
