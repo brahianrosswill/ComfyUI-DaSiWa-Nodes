@@ -245,6 +245,161 @@ function closeValueEditor() {
   el.remove();
 }
 
+// ── LoRA info panel (Civitai link, trigger words, images) ───────────────────
+// DOM overlay, same language as the inline value editor: fixed position,
+// theme-colored, Esc / outside-click closes. Data comes from
+// /dasiwa/ltx2/lorainfo (sha256 + safetensors header metadata + cached
+// Civitai by-hash lookup); sidecar images via /dasiwa/ltx2/loraimg.
+const escHtml = v => String(v ?? "").replace(/[&<>"']/g, c => (
+  { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+));
+
+function buildLoraInfoPanelHtml(info, theme) {
+  const t = theme || THEMES.a;
+  const esc = escHtml;
+  const words = (info.trainedWords || []).filter(w => w && w.word);
+  const images = (info.images || []).filter(im => im && im.url);
+  const btnStyle =
+    "background:" + t.btnBg + ";border:1px solid " + t.btnBorder + ";color:" + t.btnText +
+    ";padding:2px 8px;border-radius:3px;cursor:pointer;font:11px 'Courier New',monospace;";
+
+  const out = [];
+  out.push(
+    '<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;">' +
+      '<span style="font:11px \'Courier New\',monospace;opacity:.8;overflow-wrap:anywhere;">' + esc(info.file) + "</span>" +
+      '<button data-action="refresh" title="Re-fetch from Civitai" style="' + btnStyle + '">Refresh</button>' +
+      (words.length ? '<button data-action="copy-words" style="' + btnStyle + '">Copy all</button>' : "") +
+      (words.length ? '<button data-action="copy-selected" style="' + btnStyle + '">Copy selected</button>' : "") +
+      '<button data-action="close" title="Close" style="' + btnStyle + ';margin-left:auto;">×</button>' +
+    "</div>"
+  );
+  if (info.sha256) {
+    out.push('<div style="font:9px \'Courier New\',monospace;opacity:.5;">sha256 ' + esc(info.sha256.slice(0, 16)) + "</div>");
+  }
+  if (info.civitaiFound) {
+    const link = (info.links || []).find(l => typeof l === "string" && l.includes("civitai.com")) || "";
+    out.push(
+      '<div style="margin-top:6px;font:12px \'Courier New\',monospace;">' +
+        '<div style="font-weight:bold;">' + esc(info.name || info.file) + "</div>" +
+        (info.type || info.baseModel
+          ? '<div style="opacity:.6;">' + esc([info.type, info.baseModel].filter(Boolean).join(" · ")) + "</div>"
+          : "") +
+        (link ? '<a href="' + esc(link) + '" target="_blank" rel="noreferrer" style="color:' + t.btnText + ';">' + esc(link) + "</a>" : "") +
+      "</div>"
+    );
+  } else {
+    out.push('<div style="margin-top:6px;font:11px \'Courier New\',monospace;opacity:.8;">⚠ ' + esc(info.civitaiError || "no civitai data") + "</div>");
+  }
+  if (words.length) {
+    out.push(
+      '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;">' +
+        words.map(w =>
+          '<button data-word="' + esc(w.word) + '" title="Toggle selection" style="' + btnStyle + '">' +
+          esc(w.word) + (w.count ? ' <span style="opacity:.5;">' + w.count + "</span>" : "") +
+          "</button>"
+        ).join("") +
+      "</div>"
+    );
+  }
+  if (info.imageLocal) {
+    out.push(
+      '<div style="margin-top:8px;">' +
+        '<img src="' + esc(info.imageLocal) + '" style="width:100%;max-height:160px;object-fit:cover;border-radius:3px;">' +
+        '<div style="font:9px \'Courier New\',monospace;opacity:.5;">local sidecar</div>' +
+      "</div>"
+    );
+  }
+  if (images.length) {
+    out.push(
+      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:8px;">' +
+        images.slice(0, 6).map(im =>
+          im.type === "video"
+            ? '<video src="' + esc(im.url) + '" muted loop controls style="width:100%;max-height:140px;background:#000;"></video>'
+            : '<figure style="margin:0;">' +
+                '<img src="' + esc(im.url) + '" style="width:100%;max-height:140px;object-fit:cover;border-radius:2px;">' +
+                '<figcaption style="font:8px \'Courier New\',monospace;opacity:.5;">' +
+                  (im.seed != null ? "seed " + im.seed : "") + (im.model ? " · " + esc(im.model) : "") +
+                "</figcaption></figure>"
+        ).join("") +
+      "</div>"
+    );
+  }
+  return out.join("");
+}
+
+let activeInfoPanel = null;
+
+function closeInfoPanel() {
+  if (activeInfoPanel) {
+    activeInfoPanel.remove();
+    activeInfoPanel = null;
+  }
+}
+
+function copyInfoWords(items) {
+  const text = items.filter(Boolean).join(" ");
+  if (text && navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {});
+}
+
+function openLoraInfo(lora, theme) {
+  closeInfoPanel();
+  const t = theme || THEMES.a;
+  const panel = document.createElement("div");
+  panel.style.cssText = [
+    "position:fixed", "inset:0", "z-index:10004",
+    "background:#00000080", "display:flex", "align-items:center", "justify-content:center",
+  ].join(";");
+  const box = document.createElement("div");
+  box.style.cssText = [
+    "max-width:420px", "max-height:70vh", "overflow:auto",
+    "background:#0e1116", "border:1px solid " + t.btnBorder, "border-radius:6px",
+    "padding:10px 12px", "box-shadow:0 6px 18px #000",
+    "font:12px 'Courier New',monospace", "color:" + t.btnText,
+  ].join(";");
+  panel.appendChild(box);
+  document.body.appendChild(panel);
+  activeInfoPanel = panel;
+
+  const close = () => {
+    panel.remove();
+    document.removeEventListener("keydown", onKey, true);
+    if (activeInfoPanel === panel) activeInfoPanel = null;
+  };
+  const onKey = ev => { if (ev.key === "Escape") close(); };
+  document.addEventListener("keydown", onKey, true);
+  panel.addEventListener("mousedown", ev => { if (ev.target === panel) close(); });
+
+  const paint = info => {
+    box.innerHTML = buildLoraInfoPanelHtml(info, t);
+    box.querySelector('[data-action="close"]')?.addEventListener("click", close);
+    box.querySelector('[data-action="refresh"]')?.addEventListener("click", () => load(true));
+    const wordBtns = [...box.querySelectorAll("[data-word]")];
+    const copyAll = box.querySelector('[data-action="copy-words"]');
+    const copySel = box.querySelector('[data-action="copy-selected"]');
+    copyAll?.addEventListener("click", () => copyInfoWords(wordBtns.map(w => w.dataset.word)));
+    copySel?.addEventListener("click", () =>
+      copyInfoWords(wordBtns.filter(w => w.classList.contains("sel")).map(w => w.dataset.word))
+    );
+    wordBtns.forEach(w => w.addEventListener("click", () => {
+      w.classList.toggle("sel");
+      w.style.background = w.classList.contains("sel") ? "rgba(255,255,255,.15)" : "";
+    }));
+  };
+  const load = refresh => {
+    box.innerHTML = "<div style='opacity:.6;'>Loading info…</div>";
+    fetch(`/dasiwa/ltx2/lorainfo?lora=${encodeURIComponent(lora)}${refresh ? "&refresh=1" : ""}`)
+      .then(r => r.json())
+      .then(paint)
+      .catch(() => paint({
+        file: lora,
+        civitaiFound: false,
+        civitaiError: "info fetch failed (server route unavailable?)",
+        links: [], images: [], trainedWords: [],
+      }));
+  };
+  load(false);
+}
+
 async function getCurrentLoraList(nodeData) {
   const fallback = nodeData?.input?.hidden?.available_loras?.[0] || ["None"];
 
@@ -440,6 +595,7 @@ app.registerExtension({
         vX: 635 * s, vW: 60 * s,
         aX: 702 * s, aW: 60 * s,
         rX: 770 * s, rW: W - 770 * s - 8,
+        iX: 976 * s, iW: 14 * s,
       };
 
       for (let i = 0; i < data.length; i++) {
@@ -451,6 +607,7 @@ app.registerExtension({
         if (x > C.vX && x < C.vX + C.vW) return CONTROL_DESCRIPTIONS.video;
         if (x > C.aX && x < C.aX + C.aW) return CONTROL_DESCRIPTIONS.audio;
         if (x > C.rX && x < C.rX + C.rW) return CONTROL_DESCRIPTIONS.keys;
+        if (x > C.iX && x < C.iX + C.iW) return "Show LoRA info (Civitai, trigger words, images)";
       }
 
       return "";
@@ -492,6 +649,7 @@ app.registerExtension({
         vX: 635 * s, vW: 60 * s,
         aX: 702 * s, aW: 60 * s,
         rX: 770 * s, rW: W - 770 * s - 8,
+        iX: 976 * s, iW: 14 * s,
       };
 
       const modeW = 150, modeX = (W - modeW) / 2;
@@ -651,6 +809,11 @@ app.registerExtension({
               .catch(() => { keyCache[row.lora] = { v: "?", a: "?" }; });
           }
         }
+
+        // Info glyph (row right edge): opens the Civitai/trigger-words panel.
+        ctx.font = "9px 'Courier New',monospace";
+        ctx.fillStyle = row.lora !== "None" ? t.strColor + "AA" : t.nameEmpty;
+        ctx.fillText("ⓘ", C.iX, ry + ROW_H / 2 + 3);
       }
     };
 
@@ -737,11 +900,18 @@ app.registerExtension({
           stX: 548 * s, stW: 80 * s,
           vX: 635 * s, vW: 60 * s,
           aX: 702 * s, aW: 60 * s,
+          iX: 976 * s, iW: 14 * s,
       };
 
       for (let i = 0; i < data.length; i++) {
         const ry = ROW_START + i * ROW_H;
         if (y < ry || y > ry + ROW_H) continue;
+
+        // Info glyph (row right edge)
+        if (x > C.iX && x < C.iX + C.iW && data[i].lora !== "None") {
+          openLoraInfo(data[i].lora, t);
+          return true;
+        }
 
         if (x > C.onX && x < C.onX + C.onW) {
           data[i].on = !data[i].on;
