@@ -7,6 +7,7 @@ implementation: no MiniMax class is mutated globally.
 
 from __future__ import annotations
 
+import inspect
 import logging
 import types
 from collections.abc import Callable
@@ -167,7 +168,15 @@ class H3SamplingScope:
             self.cache.finish()
 
 
-def build_h3_block_loop_forward():
+def final_layer_call(final_layer, hidden_states, timestep_embedding, video_segment, audio_segment,
+                     sigma_v, transformer_options, shift_v, shift_a, with_pdd_args):
+    if with_pdd_args:
+        return final_layer(hidden_states, timestep_embedding, video_segment, audio_segment,
+                           sigma_v, transformer_options.get("sample_sigmas"), (shift_v, shift_a))
+    return final_layer(hidden_states, timestep_embedding, video_segment, audio_segment)
+
+
+def build_h3_block_loop_forward(with_pdd_args: bool = False):
     """Build a current-Core _forward equivalent with one block-loop patch boundary."""
     import comfy.ldm.common_dit
     import comfy.model_management
@@ -274,7 +283,7 @@ def build_h3_block_loop_forward():
             hidden_states = replacement({"img": hidden_states, "timestep": timestep, "t_emb": timestep_embedding, "mod_segments": mod_segments, "rope_freqs": rope_freqs, "transformer_options": transformer_options, "cache_ranges": cache_ranges, "block_count": len(self.blocks)}, {"original_block": original})["img"]
         video_segment = next((start, end, time_row[segment_t["video"]]) for start, end, kind in layout.segments if kind == "video")
         audio_segment = next((start, end, time_row[segment_t["audio"]]) for start, end, kind in layout.segments if kind == "audio")
-        video_result, audio_result = self.final_layer(hidden_states, timestep_embedding, video_segment, audio_segment)
+        video_result, audio_result = final_layer_call(self.final_layer, hidden_states, timestep_embedding, video_segment, audio_segment, sigma_v, transformer_options, shift_v, shift_a, with_pdd_args)
         video_out = minimax_model.unpatchify_video(video_result, latent_t, latent_h // 2, latent_w // 2, self.latents_dim, self.patch_size)
         return [-video_out[:, :, :orig_t, :orig_h, :orig_w].to(video_x.dtype), -minimax_model.unpack_audio(audio_result).to(audio_x.dtype)]
 
@@ -299,7 +308,9 @@ class MiniMaxH3Cache:
         if diffusion_model.__class__.__name__ != "MiniMaxH3Model" or not hasattr(diffusion_model, "blocks"):
             raise ValueError("MiniMax H3 Cache requires a MiniMax H3 diffusion model.")
         cache = H3BlockStackCache(reuse_threshold, start_percent, end_percent, max_steps, device, verbose)
-        patched.add_object_patch("diffusion_model._forward", types.MethodType(build_h3_block_loop_forward(), diffusion_model))
+        final_layer_params = inspect.signature(diffusion_model.final_layer.forward).parameters
+        with_pdd_args = "sample_sigmas" in final_layer_params
+        patched.add_object_patch("diffusion_model._forward", types.MethodType(build_h3_block_loop_forward(with_pdd_args), diffusion_model))
         patched.set_model_patch_replace(cache, "dit", "block_loop", 0)
         try:
             import comfy.patcher_extension
