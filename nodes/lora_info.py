@@ -9,8 +9,13 @@ import hashlib
 import json
 import os
 
+import folder_paths
+import aiohttp
+from server import PromptServer
+
 CHUNK_SIZE = 128 * 1024
 CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "lorainfo")
+CIVITAI_BY_HASH_URL = "https://civitai.com/api/v1/model-versions/by-hash/{}"
 
 
 def sha256_file(path: str) -> str:
@@ -156,3 +161,93 @@ def cache_write(sha: str, data: dict):
             json.dump(data, f)
     except Exception:
         pass
+
+
+def fetch_civitai(url: str):
+    """Fetch the Civitai by-hash endpoint. Returns the response dict or None.
+
+    Sync + monkeypatchable; the route runs it via asyncio.to_thread so a slow
+    network never blocks the event loop.
+    """
+    import urllib.request
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "ComfyUI-DaSiWa-Nodes/0.4"})
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return json.loads(r.read().decode("utf-8"))
+    except Exception:
+        return None
+
+
+def _local_image_url(lora_name: str, path: str):
+    """URL of a sidecar image next to the LoRA, or None."""
+    for ext in ("jpg", "jpeg", "png", "webp"):
+        if os.path.isfile(f"{os.path.splitext(path)[0]}.{ext}"):
+            return f"/dasiwa/ltx2/loraimg?lora={lora_name}"
+    return None
+
+
+# ── Routes ────────────────────────────────────────────────────────────────────
+@PromptServer.instance.routes.get("/dasiwa/ltx2/lorainfo")
+async def lora_info(request):
+    """LoRA info: sha256 + header metadata + cached/live Civitai data."""
+    import asyncio
+    lora_name = request.rel_url.query.get("lora", "")
+    refresh = request.rel_url.query.get("refresh") in ("1", "true")
+    path = folder_paths.get_full_path("loras", lora_name)
+    if not path or not os.path.isfile(path):
+        return aiohttp.web.json_response({"status": 404, "error": "LoRA not found"})
+
+    sha = sha256_file(path)
+    cached = None if refresh else cache_read(sha)
+    cached = cached or {}
+    info = {
+        "file": lora_name,
+        "sha256": sha,
+        "imageLocal": _local_image_url(lora_name, path),
+        "trainedWords": list(cached.get("trainedWords", [])),
+        "images": list(cached.get("images", [])),
+        "civitaiFound": bool(cached.get("civitaiFound")),
+    }
+    for key in ("name", "type", "baseModel"):
+        if cached.get(key):
+            info[key] = cached[key]
+    if cached.get("links"):
+        info["links"] = list(cached["links"])
+
+    civitai = None if refresh else cached.get("civitai")
+    civitai_error = None
+    if civitai is None:
+        url = CIVITAI_BY_HASH_URL.format(sha)
+        civitai = await asyncio.to_thread(fetch_civitai, url)
+        civitai_error = "model not found on civitai" if civitai is None else None
+        if civitai is not None:
+            civitai["_sha256"] = sha
+
+    merge_civitai(info, civitai)
+    info["civitaiFound"] = bool(civitai)
+    if civitai is None:
+        info["civitaiError"] = civitai_error or "civitai lookup unavailable"
+    metadata_words = trained_words_from_metadata(header_metadata(path))
+    if metadata_words:
+        known = {w.get("word") for w in info["trainedWords"]}
+        for w in metadata_words:
+            if w["word"] not in known:
+                info["trainedWords"].append(w)
+        info["trainedWords"] = sorted(info["trainedWords"], key=lambda w: -w.get("count", 0))
+
+    # Rebuild the cache entry: fresh civitai response + merged display fields.
+    cache_write(sha, {**info, "civitai": civitai, "raw": {}})
+    return aiohttp.web.json_response({**info, "status": 200})
+
+
+@PromptServer.instance.routes.get("/dasiwa/ltx2/loraimg")
+async def lora_img(request):
+    """Sidecar image next to the LoRA file (same basename, .jpg/.png/.jpeg/.webp)."""
+    lora_name = request.rel_url.query.get("lora", "")
+    path = folder_paths.get_full_path("loras", lora_name)
+    for ext in ("jpg", "jpeg", "png", "webp"):
+        try_path = f"{os.path.splitext(path)[0]}.{ext}" if path else None
+        if try_path and os.path.isfile(try_path):
+            from aiohttp.web import FileResponse  # lazy: test stubs aiohttp.web
+            return FileResponse(try_path)
+    return aiohttp.web.json_response({"status": 404, "error": "no image next to LoRA"})

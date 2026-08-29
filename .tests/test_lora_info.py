@@ -17,7 +17,9 @@ def info_module(monkeypatch):
     folder_paths.get_full_path = lambda _category, name: name
 
     aiohttp = types.ModuleType("aiohttp")
-    aiohttp.web = types.SimpleNamespace(json_response=lambda payload: payload)
+    aiohttp_web = types.ModuleType("aiohttp.web")
+    aiohttp_web.json_response = lambda payload: payload
+    aiohttp.web = aiohttp_web
 
     server = types.ModuleType("server")
     server.PromptServer = types.SimpleNamespace(
@@ -29,6 +31,7 @@ def info_module(monkeypatch):
     for name, module in {
         "folder_paths": folder_paths,
         "aiohttp": aiohttp,
+        "aiohttp.web": aiohttp_web,
         "server": server,
         "helper_logging": helper_logging,
     }.items():
@@ -154,3 +157,97 @@ def test_cache_write_never_raises_when_unwritable(info_module, tmp_path, monkeyp
     blocker.write_text("x")
     monkeypatch.setattr(info_module, "CACHE_DIR", str(blocker / "lorainfo"))
     info_module.cache_write("x", {"a": 1})  # makedirs under a file raises; must be swallowed
+
+
+# ── Routes ────────────────────────────────────────────────────────────────────
+import asyncio
+
+
+def _fake_request(**query):
+    return types.SimpleNamespace(rel_url=types.SimpleNamespace(query=query))
+
+
+def _run(coro):
+    return asyncio.run(coro)
+
+
+def _point_lora_at(path, monkeypatch, info_module):
+    monkeypatch.setattr(info_module, "folder_paths",
+                        types.SimpleNamespace(get_full_path=lambda _c, n: str(path)))
+
+
+def test_lorainfo_missing_file(info_module, monkeypatch, tmp_path):
+    monkeypatch.setattr(info_module, "folder_paths",
+                       types.SimpleNamespace(get_full_path=lambda _c, n: str(tmp_path / "missing.safetensors")))
+    resp = _run(info_module.lora_info(_fake_request(lora="missing.safetensors")))
+    assert resp == {"status": 404, "error": "LoRA not found"}
+
+
+def test_lorainfo_metadata_only_when_civitai_missing(info_module, monkeypatch, tmp_path):
+    lora = tmp_path / "cool.safetensors"
+    header = json.dumps({"__metadata__": {"ss_tag_frequency": '{"A": {"word_a": 3}}'}}).encode()
+    lora.write_bytes(len(header).to_bytes(8, "little") + header + b"pad")
+    _point_lora_at(lora, monkeypatch, info_module)
+    monkeypatch.setattr(info_module, "fetch_civitai", lambda _url: None)  # offline / not found
+    monkeypatch.setattr(info_module, "CACHE_DIR", str(tmp_path / "cache"))
+    resp = _run(info_module.lora_info(_fake_request(lora="cool.safetensors")))
+    assert resp["status"] == 200
+    assert len(resp["sha256"]) == 64
+    assert resp["trainedWords"] == [{"word": "word_a", "count": 3}]
+    assert resp["civitaiFound"] is False
+    assert (tmp_path / "cache" / f"{resp['sha256']}.json").exists()  # cache was written
+
+
+def test_lorainfo_civitai_data_merged(info_module, monkeypatch, tmp_path):
+    lora = tmp_path / "cool.safetensors"; lora.write_bytes(b"0" * 8 + b"{}" + b"pad")
+    _point_lora_at(lora, monkeypatch, info_module)
+    monkeypatch.setattr(info_module, "fetch_civitai", lambda _url: dict(CANNED_CIVITAI, images=[dict(CANNED_CIVITAI["images"][0])]))
+    monkeypatch.setattr(info_module, "CACHE_DIR", str(tmp_path / "cache"))
+    resp = _run(info_module.lora_info(_fake_request(lora="cool.safetensors")))
+    assert resp["civitaiFound"] is True
+    assert resp["links"] == ["https://civitai.com/models/123?modelVersionId=456"]
+    assert any(i["url"].endswith("1.png") for i in resp["images"])
+
+
+def test_lorainfo_refresh_refetches_civitai(info_module, monkeypatch, tmp_path):
+    lora = tmp_path / "cool.safetensors"; lora.write_bytes(b"0" * 8 + b"{}" + b"pad")
+    _point_lora_at(lora, monkeypatch, info_module)
+    calls = []
+
+    def fake_fetch(_url):
+        calls.append(1)
+        return {"name": "Fresh", "id": 7, "modelId": 3, "images": [], "triggerWords": []}
+
+    monkeypatch.setattr(info_module, "fetch_civitai", fake_fetch)
+    monkeypatch.setattr(info_module, "CACHE_DIR", str(tmp_path / "cache"))
+    first = _run(info_module.lora_info(_fake_request(lora="cool.safetensors")))
+    second = _run(info_module.lora_info(_fake_request(lora="cool.safetensors", refresh="1")))
+    assert len(calls) == 2  # cached on first call, refetched on refresh=1
+    assert second["name"] == "Fresh" and second["links"] == ["https://civitai.com/models/3?modelVersionId=7"]
+
+
+def test_lorainfo_sidecar_image_url(info_module, monkeypatch, tmp_path):
+    lora = tmp_path / "c.safetensors"; lora.write_bytes(b"x")
+    (tmp_path / "c.png").write_bytes(b"img")
+    _point_lora_at(lora, monkeypatch, info_module)
+    monkeypatch.setattr(info_module, "fetch_civitai", lambda _url: None)
+    monkeypatch.setattr(info_module, "CACHE_DIR", str(tmp_path / "cache"))
+    resp = _run(info_module.lora_info(_fake_request(lora="c.safetensors")))
+    assert resp["imageLocal"] == "/dasiwa/ltx2/loraimg?lora=c.safetensors"
+
+
+def test_loraimg_serves_sidecar_and_404s_without(info_module, monkeypatch, tmp_path):
+    import aiohttp  # the stub module the fixture installed
+    fake_fr = types.SimpleNamespace(kind="FileResponse")
+    aiohttp.web.FileResponse = lambda p: fake_fr
+
+    lora = tmp_path / "c.safetensors"; lora.write_bytes(b"x")
+    (tmp_path / "c.png").write_bytes(b"img")
+    _point_lora_at(lora, monkeypatch, info_module)
+    resp = _run(info_module.lora_img(_fake_request(lora="c.safetensors")))
+    assert resp is fake_fr  # sidecar served as a FileResponse
+
+    monkeypatch.setattr(info_module, "folder_paths",
+                       types.SimpleNamespace(get_full_path=lambda _c, n: str(tmp_path / "no.safetensors")))
+    resp = _run(info_module.lora_img(_fake_request(lora="no.safetensors")))
+    assert resp["status"] == 404
