@@ -7,7 +7,11 @@ const source = await readFile(new URL("../js/dasiwa_seed_control.js", import.met
 assert.match(source, /DaSiWa_SeedControl/, "seed control frontend must install for the standalone node class");
 assert.match(source, /__dasiwaSeedRestorePersistedState/, "loaded graphs must re-read the persisted seed-control state");
 assert.match(source, /__dasiwaSeedPrepareSeed/, "queuing must roll a seed in Random mode, like the Director");
-assert.match(source, /beforeQueued/, "seed preparation must run before the graph is queued");
+assert.doesNotMatch(source, /beforeQueued/, "the dead extension-level queue hook must be gone (the Vue frontend never dispatches it)");
+assert.match(source, /__dasiwaSeedQueuePatched/, "the queue-prompt wrapper must install exactly once");
+assert.match(source, /dasiwaSeedControlPatchQueuePrompt\(\);/, "the wrapper must be patched at module load");
+assert.match(source, /dasiwaSeedControlPrepareAll\(\)/, "every Seed Control node must prepare its seed before the prompt is built");
+assert.match(source, /graph\._nodes \?\? graph\.nodes \?\? \[\]/, "node lookup must tolerate both LiteGraph graph shapes");
 assert.match(source, /addDOMWidget\("dasiwa_seed_control_ui"/, "the panel must attach as the node's DOM widget");
 
 // ---- External seed socket semantics (Director behaviour) ----
