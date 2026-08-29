@@ -59,6 +59,42 @@ def _is_audio_key(k):
     return "audio" in k.lower()
 
 
+def _pdd_head_bank_info(weights, metadata):
+    """Return (is_pdd, bank_video_width) for a loaded LoRA.
+
+    A PDD LoRA carries PDD metadata (pdd_num_steps / pdd_block_size) plus a
+    final_layer head-bank set_weight. bank_video_width is the head bank's
+    first dim (e.g. 32 heads * 96 = 3072) when readable, else None.
+    Never raises.
+    """
+    md = metadata if isinstance(metadata, dict) else {}
+    # Accept both the flat form (load_torch_file return_metadata=True) and a
+    # wrapped __metadata__ dict.
+    if "__metadata__" in md and isinstance(md["__metadata__"], dict):
+        md = md["__metadata__"]
+    is_pdd = bool(md.get("pdd_num_steps") or md.get("pdd_block_size"))
+    if not is_pdd:
+        return False, None
+    bank_w = None
+    for k, v in (weights or {}).items():
+        if "video_out" in k and (k.endswith("set_weight") or k.endswith("weight")):
+            try:
+                bank_w = int(v.shape[0])
+            except Exception:
+                bank_w = None
+            break
+    return True, bank_w
+
+
+def _model_video_out_width(model):
+    """Live target video_out first dim, read defensively. None if unreadable."""
+    try:
+        w = model.model.diffusion_model.final_layer.video_out.weight
+        return int(w.shape[0])
+    except Exception:
+        return None
+
+
 def _normalize_model_type(model_type):
     return model_type if model_type in MODEL_TYPES else MODEL_TYPE_BASIC
 
@@ -86,6 +122,28 @@ def _apply_slot(model, clip, lora_name, lora_str, vs, as_, model_type, use_cache
             weights, lora_metadata = comfy.utils.load_torch_file(lora_path, safe_load=True, return_metadata=True)
         except TypeError:
             weights, lora_metadata = comfy.utils.load_torch_file(lora_path, safe_load=True), None
+
+    # PDD head-bank guard (warn-only). A PDD Acc LoRA carries a wide final_layer
+    # head bank (e.g. 32 heads x 96 = 3072 rows) that a single-head H3 model
+    # (96 rows) cannot absorb; core's set-patch copy aborts with a shape
+    # RuntimeError at comfy/lora.py. That crash is *protective*: it stops a
+    # run that would otherwise silently mismatch. We do NOT strip the head-bank
+    # keys to work around it (that would circumvent the protection); we print
+    # a console warning so the user knows why the run will abort and how to
+    # fix it, and let the crash stand until an upstream ComfyUI patch lands.
+    is_pdd, bank_w = _pdd_head_bank_info(weights, lora_metadata)
+    if is_pdd:
+        model_w = _model_video_out_width(model)
+        if model_w is not None and bank_w is not None and bank_w != model_w:
+            log_dasiwa(
+                "Advanced LoRA Loader",
+                f"'{lora_name}' PDD head-bank width {bank_w} != model {model_w}; "
+                f"the PDD head bank will NOT apply to this single-head model and the "
+                f"run will abort (core shape crash at lora.py). Pair this PDD LoRA with a "
+                f"PDD model (final_layer.video_out width {bank_w}) or a non-PDD Acc LoRA. "
+                f"Left unmodified on purpose — no circumvention until an upstream patch.",
+            )
+
     v_final = lora_str * vs
     model_type = _normalize_model_type(model_type)
     if model_type != MODEL_TYPE_LTX23:

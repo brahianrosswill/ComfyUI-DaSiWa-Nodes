@@ -136,6 +136,7 @@ STR: −0.5, V×: 1.0, A×: 0.0   (Reduce specific video features)
 - **Renamed (v0.4.27):** the loader was renamed from the LTX-2-only `DaSiWa LTX-2 Master Loader` to the universal **Advanced LoRA Loader**. The *serialized* node ID `DaSiWa_LTX2LoraLoader` is unchanged, so saved workflows load untouched; only the module, class, JS, docs, and display name changed internally.
 - **PDD/ACC metadata (v0.4.27):** the LoRA file is now read with `return_metadata=True` and the metadata is forwarded to Core's `load_lora_for_models`, matching the native `LoraLoader`. This is what activates PDD / ACC LoRA head banks. Older ComfyUI builds that don't accept the metadata are still supported via a `TypeError` fallback.
 - **Opt-in cache (v0.4.27):** when **use_cache** is on, each absolute LoRA path is kept in a bounded LRU cache (max 4 entries), so a LoRA reused across slots is read once. **Off by default** — when off, the file is read per slot (current behaviour, no change).
+- **PDD head-bank guard:** if a loaded LoRA carries PDD metadata (`pdd_num_steps`/`pdd_block_size`) **and** its `final_layer` head-bank width differs from the target model's live `final_layer.video_out` width, the head-bank `set_weight`/`set_bias` keys are skipped with a warning and the LoRA adapters are still applied. This prevents the core shape crash (`comfy/lora.py`, `The size of tensor a … must match …`) when a PDD Acc LoRA is paired with a single-head H3 model. The guard only strips on positive evidence (both widths readable and different); a genuine PDD model whose width matches is never modified.
 
 ---
 
@@ -152,6 +153,12 @@ The LoRA might have **A:0** keys (trained on silent data). Check the key count i
 
 ### Performance is slow
 Disable unused slots or reduce the number of active LoRAs. Fewer slots = faster execution.
+
+### PDD / Acc LoRA on a single-head model — `The size of tensor a (96) must match … (3072)`
+This error is raised by ComfyUI core (`comfy/lora.py`) when a **PDD Acc LoRA** (its `__metadata__` has `pdd_num_steps`, and it carries a wide `final_layer` head bank, e.g. `video_out.set_weight [3072,5376]`) is applied to a **single-head** H3 model (`final_layer.video_out [96,5376]`). The LoRA's 32-head bank cannot be copied onto a 1-head weight.
+
+- **Recommended fix:** pair the PDD LoRA with a **PDD model** (`final_layer.video_out [3072,5376]`), or use a non-PDD Acc LoRA. (PDD LoRAs from `Jalen-Brunson/ComfyUI-MiniMax-H3-PDD-Acc` / `aptech0081/…` require a PDD model — none of the single-head H3 models in a typical library are PDD.)
+- **Automatic safety net:** the loader now detects the mismatch (PDD LoRA + readable, narrower model) and skips the incompatible head-bank keys with a warning, so the LoRA's adapters still apply instead of crashing the whole workflow. You lose PDD's parallel-decoding acceleration, but the run completes.
 
 ---
 
