@@ -41,9 +41,12 @@ def _normalize_model_type(model_type):
     return model_type if model_type in MODEL_TYPES else MODEL_TYPE_BASIC
 
 
-def _apply_full_lora(model, clip, weights, strength):
+def _apply_full_lora(model, clip, weights, strength, lora_metadata=None):
     if weights and strength != 0.0:
-        return _load_lora(model, clip, weights, strength, strength)
+        try:
+            return _load_lora(model, clip, weights, strength, strength, lora_metadata=lora_metadata)
+        except TypeError:
+            return _load_lora(model, clip, weights, strength, strength)
     return model, clip
 
 
@@ -54,7 +57,10 @@ def _apply_slot(model, clip, lora_name, lora_str, vs, as_, model_type):
         log_dasiwa("Advanced LoRA Loader", f"LoRA not found: {lora_name}")
         return model, clip
 
-    weights = comfy.utils.load_torch_file(lora_path, safe_load=True)
+    try:
+        weights, lora_metadata = comfy.utils.load_torch_file(lora_path, safe_load=True, return_metadata=True)
+    except TypeError:
+        weights, lora_metadata = comfy.utils.load_torch_file(lora_path, safe_load=True), None
     v_final = lora_str * vs
     model_type = _normalize_model_type(model_type)
     if model_type != MODEL_TYPE_LTX23:
@@ -62,7 +68,7 @@ def _apply_slot(model, clip, lora_name, lora_str, vs, as_, model_type):
             "Advanced LoRA Loader",
             f"'{lora_name}' mode={model_type} full:{len(weights)}@{v_final:.2f}",
         )
-        return _apply_full_lora(model, clip, weights, v_final)
+        return _apply_full_lora(model, clip, weights, v_final, lora_metadata)
 
     video_weights = {k: v for k, v in weights.items() if not _is_audio_key(k)}
     audio_weights = {k: v for k, v in weights.items() if _is_audio_key(k)}
@@ -71,8 +77,8 @@ def _apply_slot(model, clip, lora_name, lora_str, vs, as_, model_type):
         "Advanced LoRA Loader",
         f"'{lora_name}' mode=LTX-2.3 V:{len(video_weights)}@{v_final:.2f} A:{len(audio_weights)}@{a_final:.2f}",
     )
-    model, clip = _apply_full_lora(model, clip, video_weights, v_final)
-    return _apply_full_lora(model, clip, audio_weights, a_final)
+    model, clip = _apply_full_lora(model, clip, video_weights, v_final, lora_metadata)
+    return _apply_full_lora(model, clip, audio_weights, a_final, lora_metadata)
 
 
 # ── Key count endpoint ────────────────────────────────────────────────────────

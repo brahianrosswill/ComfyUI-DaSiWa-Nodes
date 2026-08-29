@@ -27,7 +27,7 @@ def loader_module(monkeypatch):
     comfy_utils = types.ModuleType("comfy.utils")
     comfy_lora = types.ModuleType("comfy.lora")
     comfy_sd = types.ModuleType("comfy.sd")
-    comfy_utils.load_torch_file = lambda *_args, **_kwargs: {}
+    comfy_utils.load_torch_file = lambda *_args, **_kwargs: ({}, None)
     comfy_lora.load_lora_for_models = lambda model, clip, _weights, _model_strength, _clip_strength: (model, clip)
     comfy.utils = comfy_utils
     comfy.lora = comfy_lora
@@ -85,7 +85,7 @@ def test_basic_mode_applies_every_weight_once(loader_module, tmp_path, monkeypat
     }
     calls = []
 
-    loader_module.comfy.utils.load_torch_file = lambda *_args, **_kwargs: weights
+    loader_module.comfy.utils.load_torch_file = lambda *_args, **_kwargs: (weights, None)
     monkeypatch.setattr(
         loader_module,
         "_load_lora",
@@ -109,7 +109,7 @@ def test_basic_mode_ignores_audio_multiplier(loader_module, tmp_path, monkeypatc
     weights = {"adapter.audio_projection.lora_A.weight": object()}
     calls = []
 
-    loader_module.comfy.utils.load_torch_file = lambda *_args, **_kwargs: weights
+    loader_module.comfy.utils.load_torch_file = lambda *_args, **_kwargs: (weights, None)
     monkeypatch.setattr(
         loader_module,
         "_load_lora",
@@ -135,7 +135,7 @@ def test_ltx23_separates_audio_keys_and_applies_independent_strengths(loader_mod
         "transformer.audio_block.lora_A.weight": audio_weight,
     }
 
-    loader_module.comfy.utils.load_torch_file = lambda *_args, **_kwargs: weights
+    loader_module.comfy.utils.load_torch_file = lambda *_args, **_kwargs: (weights, None)
     monkeypatch.setattr(
         loader_module,
         "_load_lora",
@@ -151,6 +151,28 @@ def test_ltx23_separates_audio_keys_and_applies_independent_strengths(loader_mod
     assert calls[1][:3] == ("model:loaded", "clip:loaded", {"transformer.audio_block.lora_A.weight": audio_weight})
     assert math.isclose(calls[0][3], 0.4) and math.isclose(calls[0][4], 0.4)
     assert math.isclose(calls[1][3], 1.2) and math.isclose(calls[1][4], 1.2)
+
+
+def test_basic_mode_passes_lora_metadata_to_core_loader(loader_module, tmp_path, monkeypatch):
+    lora_path = tmp_path / "pdd.safetensors"
+    lora_path.touch()
+    weights = {"diffusion_model.blocks.0.attn.qkv_proj.lora_A.weight": object(),
+               "diffusion_model.final_layer.video_out.set_weight": object()}
+    metadata = {"pdd_num_steps": 32, "pdd_block_size": 4, "converted_layout": "comfyui_minimax_h3"}
+    calls = []
+
+    loader_module.comfy.utils.load_torch_file = lambda *_args, **_kwargs: (weights, metadata)
+    monkeypatch.setattr(
+        loader_module, "_load_lora",
+        lambda model, clip, loaded_weights, model_strength, clip_strength, lora_metadata=None: (
+            calls.append((loaded_weights, model_strength, clip_strength, lora_metadata))
+            or (model, clip)
+        ),
+    )
+
+    loader_module._apply_slot("model", "clip", str(lora_path), 1.0, 1.0, 1.0, "Basic")
+
+    assert calls == [(weights, 1.0, 1.0, metadata)]
 
 
 def test_frontend_has_mode_selector_and_disables_unavailable_audio_controls():
