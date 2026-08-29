@@ -72,7 +72,8 @@ Each row represents one LoRA slot. Columns are:
 | **V×** | Video multiplier. Left/right arrows adjust by ±0.05, middle click opens an inline editor. Range: 0.0 to 2.0. |
 | **A×** | Audio multiplier. Same controls as V×. Range: 0.0 to 2.0. |
 | **V:N A:N** | Key count indicator (right side). Shows how many video and audio keys this LoRA contains. Updates automatically. |
-| **ⓘ** | Info button (row right edge, dimmed for empty slots). Opens the LoRA info panel: Civitai link (looked up by the file's SHA-256), trigger/trained words, and preview images. |
+| **ⓘ** | Info button (row right edge, dimmed for empty slots). Drawn as a circle with an "i" (ASCII, no emoji). Opens the LoRA info panel: Civitai link (looked up by the file's SHA-256), trigger/trained words, and preview images. |
+| **Trash** | Trash button (directly right of the info button, dimmed for empty slots). Drawn as an ASCII trash-can (no emoji). Clicking it sets this slot's LoRA back to **None** — the STR / V× / A× values are kept, exactly like picking "None" in the slot picker. Use it to unstack a LoRA without reopening the picker. (v0.4.29) |
 
 ### Buttons
 
@@ -102,6 +103,12 @@ Click the ⓘ glyph at the right edge of a slot's row (v0.4.28) to open an info 
 - **Images** — Civitai preview images (first six), plus a local sidecar image (`.png` / `.jpg` / `.jpeg` / `.webp` with the same basename as the LoRA) if one sits next to the file.
 
 If the LoRA is not on Civitai, the panel says so and still shows the metadata-based words and any local image. No internet access is required for the metadata/local-image parts; only the Civitai lookup touches the network.
+
+---
+
+## Trash Button (per slot, v0.4.29)
+
+Every slot row shows a small ASCII-drawn trash button directly to the right of the info button (dimmed when the slot is already **None**). Clicking it sets that slot's LoRA back to **None** while keeping the slot's STR / V× / A× values — the same result as picking "None" from the slot picker, but without reopening it. The info button was shifted slightly left to make room for the trash button.
 
 ---
 

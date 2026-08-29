@@ -140,7 +140,8 @@ The **Advanced LoRA Loader** is a 10-slot stacker for ordinary image/video LoRAs
 - **Key Count Indicator:** Auto-scans each LoRA to show video/audio key counts before generation.
 - **6 Themes:** Switch between Jade, Neon, Studio, Chrome, OLED, and Wood color schemes.
 - **Searchable UI:** Quick LoRA search with live filtering in the node itself.
-- **LoRA Info Button (ⓘ):** an ⓘ glyph at the right edge of each slot row opens an info panel with the LoRA's Civitai link (looked up by the file's SHA-256, cached in `lorainfo/`), trigger/trained words from the safetensors header and Civitai (click-select, copy), and preview images (Civitai plus a local sidecar image next to the LoRA if present).
+- **LoRA Info Button (ⓘ):** an info button at the right edge of each slot row (drawn as a circle with an "i") opens an info panel with the LoRA's Civitai link (looked up by the file's SHA-256, cached in `lorainfo/`), trigger/trained words from the safetensors header and Civitai (click-select, copy), and preview images (Civitai plus a local sidecar image next to the LoRA if present).
+- **Trash Button (v0.4.29):** a small ASCII-drawn trash button sits directly right of the info button. It resets that slot's LoRA back to **None** (STR / V× / A× kept — same as picking None in the picker) so you can unstack a LoRA without reopening the picker. The info button shifted slightly left to make room.
 - **PDD/ACC Metadata (v0.4.27):** LoRA files are read with their metadata and it is forwarded to Core's `load_lora_for_models` like the native `LoraLoader`, so PDD/ACC head banks activate; older ComfyUI builds fall back automatically.
 - **Opt-in LoRA Cache (v0.4.27):** a cache button in the control strip keeps each unique LoRA file in a small LRU cache so a LoRA reused across slots is read once — **off by default**.
 

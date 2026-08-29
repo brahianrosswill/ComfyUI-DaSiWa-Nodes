@@ -6,6 +6,7 @@ This changelog covers the last two months: **2026-06-29 → 2026-08-29**. The fi
 
 ## News
 
+- **Advanced LoRA Loader trash button (08-29):** every slot row gets a trash button (plain canvas paths, ASCII — a drawn trash-can, no emoji) directly right of the info button — it resets that slot's LoRA back to "None" (strengths and multipliers kept, exactly like selecting None in the picker), so you can unstack a LoRA without reopening the picker. The info button shifted slightly left to make room. No backend change; version bump to 0.4.29.
 - **Seed Control queue roll (08-29):** Random mode rolls a fresh seed on every queue again under the new Vue frontend — the legacy extension-level queue hook stopped dispatching there, so the roll now runs by wrapping the app's queue entry point (Fixed mode and external-seed links unchanged).
 - **LoRA info button (08-29):** the Advanced LoRA Loader rows now have an ⓘ glyph at the right edge. It opens a panel with the LoRA's Civitai link (looked up by the file's SHA-256, cached in `lorainfo/`), trigger/trained words from the safetensors header and Civitai (click-select, copy), and preview images (Civitai + a local sidecar `*.png` next to the LoRA if present).
 - **Advanced LoRA Loader: universal rename + PDD/ACC support + opt-in cache (08-29):** the LTX-2-only loader is renamed to a universal **Advanced LoRA Loader** (serialized node ID unchanged), forwards PDD/ACC LoRA metadata to Core so PDD/ACC head banks activate, and gains an **opt-in** `use_cache` button (default off) that caches each unique LoRA file across slots.
@@ -24,6 +25,7 @@ Quick reference for the version bumps inside this window, newest first:
 
 | Version | Date | Headline |
 |---|---|---|
+| 0.4.29 | 08-29 | Advanced LoRA Loader trash button (per-row, resets the slot to None) |
 | 0.4.28 | 08-29 | LoRA info button in the Advanced LoRA Loader (Civitai link, trigger words, images) |
 | 0.4.27 | 08-29 | Advanced LoRA Loader universal rename; PDD/ACC metadata passthrough; opt-in cache button |
 | 0.4.26 | 08-29 | H3 Cache PDD head-bank + per-token mask support |
@@ -73,6 +75,7 @@ Quick reference for the version bumps inside this window, newest first:
 
 ### Advanced LoRA Loader (formerly LTX-2.3)
 
+- **08-29:** **Trash button (0.4.29):** each slot row gained a trash button (plain canvas paths, ASCII-drawn trash-can, no emoji) placed directly right of the info button. Clicking it resets that slot's LoRA back to "None" (the STR / VIS / A multipliers are kept — exactly like picking "None" in the slot picker), so a LoRA can be unstacked without reopening the picker. The info button shifted slightly left (x 976 → 962) to make room; the trash button occupies the previous info x. UI-only, no backend change.
 - **08-29:** **LoRA info button (0.4.28):** each slot row gained an ⓘ glyph at its right edge. It opens an info panel with the LoRA's Civitai link (SHA-256 looked up on Civitai's `model-versions/by-hash` API, results cached in `lorainfo/`), trigger/trained words from the safetensors header and Civitai (click-select, copy), and preview images (Civitai plus a local sidecar image next to the LoRA if present). Two new GET-only routes (`/dasiwa/ltx2/lorainfo`, `/dasiwa/ltx2/loraimg`) in `nodes/lora_info.py`; no new dependencies.
 - **08-29:** **PDD/Acc LoRA head-bank guard (warn-only):** when a PDD LoRA (`pdd_num_steps`) is applied to a single-head H3 model, the loader prints a console warning — the incompatible `final_layer` head-bank `set`/`bias` keys are **kept**, so the protective core shape crash at `comfy/lora.py` still aborts the run (deliberate: no circumvention until an upstream patch lands). The guard warns only on positive evidence (bank width and model width both readable and different); a genuine PDD model whose width matches is untouched. **Recommended fix:** pair PDD LoRAs with a PDD model (`final_layer.video_out [3072,5376]`). Bugfix — no version bump.
 - **08-29:** **universal rename + PDD/ACC support + opt-in cache:** the LTX-2-only `DaSiWa LTX-2 Master Loader` is renamed to the **Advanced LoRA Loader** — module/class/JS/docs/display name changed internally, but the *serialized* node ID `DaSiWa_LTX2LoraLoader` and display name stay stable for saved workflows (display now drops the "DaSiWa" prefix). The file is read with `return_metadata=True` and the PDD/ACC metadata is forwarded to Core's `load_lora_for_models`, so PDD / ACC LoRA head banks activate (older builds fall back via `TypeError`). A new **⚡ CACHE** button in the control strip enables an opt-in per-path LRU cache (max 4 entries, **off by default**), so a LoRA reused across slots is read once.

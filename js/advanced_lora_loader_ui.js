@@ -595,7 +595,8 @@ app.registerExtension({
         vX: 635 * s, vW: 60 * s,
         aX: 702 * s, aW: 60 * s,
         rX: 770 * s, rW: W - 770 * s - 8,
-        iX: 976 * s, iW: 14 * s,
+        iX: 962 * s, iW: 14 * s,
+        tX: 976 * s, tW: 14 * s,
       };
 
       for (let i = 0; i < data.length; i++) {
@@ -608,6 +609,7 @@ app.registerExtension({
         if (x > C.aX && x < C.aX + C.aW) return CONTROL_DESCRIPTIONS.audio;
         if (x > C.rX && x < C.rX + C.rW) return CONTROL_DESCRIPTIONS.keys;
         if (x > C.iX && x < C.iX + C.iW) return "Show LoRA info (Civitai, trigger words, images)";
+        if (x > C.tX && x < C.tX + C.tW) return "Trash this LoRA (set the slot back to None)";
       }
 
       return "";
@@ -649,7 +651,8 @@ app.registerExtension({
         vX: 635 * s, vW: 60 * s,
         aX: 702 * s, aW: 60 * s,
         rX: 770 * s, rW: W - 770 * s - 8,
-        iX: 976 * s, iW: 14 * s,
+        iX: 962 * s, iW: 14 * s,
+        tX: 976 * s, tW: 14 * s,
       };
 
       const modeW = 150, modeX = (W - modeW) / 2;
@@ -810,10 +813,50 @@ app.registerExtension({
           }
         }
 
-        // Info glyph (row right edge): opens the Civitai/trigger-words panel.
-        ctx.font = "9px 'Courier New',monospace";
-        ctx.fillStyle = row.lora !== "None" ? t.strColor + "AA" : t.nameEmpty;
-        ctx.fillText("ⓘ", C.iX, ry + ROW_H / 2 + 3);
+        // Info button (row right edge): drawn circle + "i"; opens the
+        // Civitai/trigger-words panel.
+        {
+          const infoCol = row.lora !== "None" ? t.strColor + "AA" : t.nameEmpty;
+          const cx = C.iX + C.iW / 2, cy = ry + ROW_H / 2;
+          const r = 5.5 * s;
+          ctx.strokeStyle = infoCol;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(cx, cy, r, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.fillStyle = infoCol;
+          ctx.font = "bold " + Math.max(6, Math.round(8 * s)) + "px 'Courier New',monospace";
+          ctx.textAlign = "center";
+          ctx.fillText("i", cx, cy + 3 * s);
+          ctx.textAlign = "left";
+        }
+
+        // Trash button (right of info): drawn trash-can shape; resets this
+        // slot back to "None".
+        {
+          const trCol = row.lora !== "None" ? t.offColor + "CC" : t.nameEmpty;
+          const cx = C.tX + C.tW / 2, cy = ry + ROW_H / 2;
+          ctx.strokeStyle = trCol;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          // lid + handle
+          ctx.moveTo(cx - 4 * s, cy - 3.5 * s);
+          ctx.lineTo(cx + 4 * s, cy - 3.5 * s);
+          ctx.moveTo(cx, cy - 4.5 * s);
+          ctx.lineTo(cx, cy - 3.5 * s);
+          // body
+          ctx.moveTo(cx - 3 * s, cy - 2 * s);
+          ctx.lineTo(cx + 3 * s, cy - 2 * s);
+          ctx.lineTo(cx + 2.2 * s, cy + 4 * s);
+          ctx.lineTo(cx - 2.2 * s, cy + 4 * s);
+          ctx.closePath();
+          // ribs
+          ctx.moveTo(cx - 1 * s, cy - 1 * s);
+          ctx.lineTo(cx - 0.7 * s, cy + 3 * s);
+          ctx.moveTo(cx + 1 * s, cy - 1 * s);
+          ctx.lineTo(cx + 0.7 * s, cy + 3 * s);
+          ctx.stroke();
+        }
       }
     };
 
@@ -900,7 +943,8 @@ app.registerExtension({
           stX: 548 * s, stW: 80 * s,
           vX: 635 * s, vW: 60 * s,
           aX: 702 * s, aW: 60 * s,
-          iX: 976 * s, iW: 14 * s,
+          iX: 962 * s, iW: 14 * s,
+          tX: 976 * s, tW: 14 * s,
       };
 
       for (let i = 0; i < data.length; i++) {
@@ -910,6 +954,15 @@ app.registerExtension({
         // Info glyph (row right edge)
         if (x > C.iX && x < C.iX + C.iW && data[i].lora !== "None") {
           openLoraInfo(data[i].lora, t);
+          return true;
+        }
+
+        // Trash button (right of info): reset this slot back to "None".
+        if (x > C.tX && x < C.tX + C.tW && data[i].lora !== "None") {
+          data[i].lora = "None";
+          this.properties.stack_data = JSON.stringify(data);
+          sync(this);
+          this.setDirtyCanvas(true);
           return true;
         }
 
