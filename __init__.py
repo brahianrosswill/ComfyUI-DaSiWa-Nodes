@@ -18,6 +18,7 @@ if __package__:
 
     from .nodes import nodes_system_monitor
     from .nodes import input_images  # registers /dasiwa/input-images route
+    from .nodes import lora_info  # registers /dasiwa/ltx2/lorainfo + /dasiwa/ltx2/loraimg
     from .nodes.helper_logging import log_startup_summary
 
     NODE_CLASS_MAPPINGS = {
