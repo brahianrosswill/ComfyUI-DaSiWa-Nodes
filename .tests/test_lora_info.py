@@ -18,7 +18,7 @@ def info_module(monkeypatch):
 
     aiohttp = types.ModuleType("aiohttp")
     aiohttp_web = types.ModuleType("aiohttp.web")
-    aiohttp_web.json_response = lambda payload: payload
+    aiohttp_web.json_response = lambda payload, status=200: {**payload, "_http_status": status}
     aiohttp.web = aiohttp_web
 
     server = types.ModuleType("server")
@@ -180,7 +180,9 @@ def test_lorainfo_missing_file(info_module, monkeypatch, tmp_path):
     monkeypatch.setattr(info_module, "folder_paths",
                        types.SimpleNamespace(get_full_path=lambda _c, n: str(tmp_path / "missing.safetensors")))
     resp = _run(info_module.lora_info(_fake_request(lora="missing.safetensors")))
-    assert resp == {"status": 404, "error": "LoRA not found"}
+    assert resp["status"] == 404
+    assert resp["error"] == "LoRA not found"
+    assert resp["_http_status"] == 404
 
 
 def test_lorainfo_metadata_only_when_civitai_missing(info_module, monkeypatch, tmp_path):
@@ -251,3 +253,4 @@ def test_loraimg_serves_sidecar_and_404s_without(info_module, monkeypatch, tmp_p
                        types.SimpleNamespace(get_full_path=lambda _c, n: str(tmp_path / "no.safetensors")))
     resp = _run(info_module.lora_img(_fake_request(lora="no.safetensors")))
     assert resp["status"] == 404
+    assert resp["_http_status"] == 404

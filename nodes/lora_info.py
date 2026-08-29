@@ -195,7 +195,7 @@ async def lora_info(request):
     refresh = request.rel_url.query.get("refresh") in ("1", "true")
     path = folder_paths.get_full_path("loras", lora_name)
     if not path or not os.path.isfile(path):
-        return aiohttp.web.json_response({"status": 404, "error": "LoRA not found"})
+        return aiohttp.web.json_response({"status": 404, "error": "LoRA not found"}, status=404)
 
     sha = sha256_file(path)
     cached = None if refresh else cache_read(sha)
@@ -250,4 +250,4 @@ async def lora_img(request):
         if try_path and os.path.isfile(try_path):
             from aiohttp.web import FileResponse  # lazy: test stubs aiohttp.web
             return FileResponse(try_path)
-    return aiohttp.web.json_response({"status": 404, "error": "no image next to LoRA"})
+    return aiohttp.web.json_response({"status": 404, "error": "no image next to LoRA"}, status=404)
