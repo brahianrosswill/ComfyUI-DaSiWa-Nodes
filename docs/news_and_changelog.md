@@ -25,6 +25,7 @@ Quick reference for the version bumps inside this window, newest first:
 
 | Version | Date | Headline |
 |---|---|---|
+| 0.4.30 | 08-29 | Seed Control: Random-mode roll via the graphToPrompt choke point; panel DOM syncs after a run |
 | 0.4.29 | 08-29 | Advanced LoRA Loader trash button (per-row, resets the slot to None) |
 | 0.4.28 | 08-29 | LoRA info button in the Advanced LoRA Loader (Civitai link, trigger words, images) |
 | 0.4.27 | 08-29 | Advanced LoRA Loader universal rename; PDD/ACC metadata passthrough; opt-in cache button |
