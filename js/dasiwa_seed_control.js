@@ -229,11 +229,18 @@ function dasiwaSeedControlInstall(node) {
 
 // ── Queue-time seed preparation ────────────────────────────────────────
 // The Vue-based ComfyUI frontend no longer dispatches the legacy extension
-// queue hook, so the Random-mode roll is triggered by wrapping the app's
-// queue entry point instead. One roll per queue action: a batch-queued
-// run of N outputs rolls once, matching the documented 'rolls a fresh seed
-// on every queue' semantics. Fixed mode and linked external seeds are
-// left alone — __dasiwaSeedPrepareSeed early-returns for both.
+// queue hook, and its Run button queues through an internal store path
+// that never calls the global app.queuePrompt — so the Random-mode roll is
+// triggered by wrapping the app's prompt-build entry point (graphToPrompt)
+// instead, the same approach Pixaroma's Seed node uses. That method is the
+// single choke point every Run routes through: the Run button, batch items,
+// and partial execution all serialize the graph via it. The pre-pass rolls
+// the seed BEFORE the graph is serialized, so the fresh seed is what lands
+// in the queued prompt body (and what H3 Cache keys on). One roll per
+// prompt build: a batch-queued run of N outputs rolls once, matching the
+// documented 'rolls a fresh seed on every queue' semantics. Fixed mode and
+// linked external seeds are left alone — __dasiwaSeedPrepareSeed
+// early-returns for both.
 
 function dasiwaSeedControlNodesInGraphTree(graph, visited = new Set()) {
   if (!graph || visited.has(graph)) return [];
@@ -248,17 +255,17 @@ function dasiwaSeedControlPrepareAll() {
   }
 }
 
-function dasiwaSeedControlPatchQueuePrompt() {
-  if (app.__dasiwaSeedQueuePatched || typeof app?.queuePrompt !== "function") return;
-  const originalQueuePrompt = app.queuePrompt;
-  app.queuePrompt = function (...args) {
+function dasiwaSeedControlPatchGraphToPrompt() {
+  if (app.__dasiwaSeedGraphPromptPatched || typeof app?.graphToPrompt !== "function") return;
+  const originalGraphToPrompt = app.graphToPrompt.bind(app);
+  app.graphToPrompt = async function (...args) {
     dasiwaSeedControlPrepareAll();
-    return originalQueuePrompt.apply(this, args);
+    return originalGraphToPrompt(...args);
   };
-  app.__dasiwaSeedQueuePatched = true;
+  app.__dasiwaSeedGraphPromptPatched = true;
 }
 
-dasiwaSeedControlPatchQueuePrompt();
+dasiwaSeedControlPatchGraphToPrompt();
 
 app.registerExtension({
   name: "DaSiWa.SeedControl",

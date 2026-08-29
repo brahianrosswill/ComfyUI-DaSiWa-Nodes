@@ -8,8 +8,10 @@ assert.match(source, /DaSiWa_SeedControl/, "seed control frontend must install f
 assert.match(source, /__dasiwaSeedRestorePersistedState/, "loaded graphs must re-read the persisted seed-control state");
 assert.match(source, /__dasiwaSeedPrepareSeed/, "queuing must roll a seed in Random mode, like the Director");
 assert.doesNotMatch(source, /beforeQueued/, "the dead extension-level queue hook must be gone (the Vue frontend never dispatches it)");
-assert.match(source, /__dasiwaSeedQueuePatched/, "the queue-prompt wrapper must install exactly once");
-assert.match(source, /dasiwaSeedControlPatchQueuePrompt\(\);/, "the wrapper must be patched at module load");
+assert.doesNotMatch(source, /app\.queuePrompt\s*=/, "the global queue entry point must not be the roll trigger (the Vue Run button never calls it)");
+assert.match(source, /app\.graphToPrompt/, "the roll must hook the prompt-build entry point, which every Run path serializes through");
+assert.match(source, /__dasiwaSeedGraphPromptPatched/, "the graphToPrompt wrapper must install exactly once");
+assert.match(source, /dasiwaSeedControlPatchGraphToPrompt\(\);/, "the wrapper must be patched at module load");
 assert.match(source, /dasiwaSeedControlPrepareAll\(\)/, "every Seed Control node must prepare its seed before the prompt is built");
 assert.match(source, /graph\._nodes \?\? graph\.nodes \?\? \[\]/, "node lookup must tolerate both LiteGraph graph shapes");
 assert.match(source, /addDOMWidget\("dasiwa_seed_control_ui"/, "the panel must attach as the node's DOM widget");
