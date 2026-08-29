@@ -2,6 +2,8 @@
 
 A high-performance collection of custom nodes for ComfyUI, optimized for video workflows, resolution management, and logic control.
 
+[📰 News & Changelog — release notes and complete change history across the collection →](docs/news_and_changelog.md)
+
 ## Included Nodes
 
 ### 🎬 MiniMax H3 Director

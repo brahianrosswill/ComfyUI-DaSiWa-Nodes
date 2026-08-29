@@ -2,58 +2,11 @@
 
 A timeline-based authoring node for ComfyUI's native MiniMax H3 models. It centralizes media management, ordering, trimming, per-reference prompts, and the global prompt into one workflow node, validates H3 constraints before execution, and routes everything to the installed native MiniMax H3 implementation — no duplicate backend logic.
 
-## Changelog (latest additions)
+[News & Changelog — collection-wide news and change history →](news_and_changelog.md)
 
-Since the last GitHub release (August 2026):
+## Changelog
 
-### New features
-
-- **Image Inpaint mode:** a new **Image Inpaint** mode alongside FL2VA / REF2VA — exactly one image reference (no video/audio) run through the native `MiniMaxH3ImageToVideo` node as a 5-frame image-to-video pass with the image as keyframe; extract the single result with a **Get Image from Batch**. The Director emits an `inpaint_requested` output (the old `ref2va_requested` socket was renamed) so downstream sampling can branch on mode, and the Guide routes the mode to the native image-to-video call (first frame set, last frame `None`).
-- **Simple / Structured prompt-mode toggle:** a mode-bar switch changes how builder fields assemble into the final prompt — **Structured** keeps the labelled sections (headers added upstream), **Simple** renders one flat, header-less block. Persisted in `builder_state` (`prompt_mode`), restored on load, honored by **Preview Prompt**; defaults to Structured for backward compatibility.
-- **Grouped column dropdowns:** Aspect / Resolution / Input scaling now render as grouped, ascending columns (aspect by orientation, resolution by ###p / MP tier) with the auto options relabelled **Native (ShortEdge 768px)** (Resolution) and **Native (ShortEdge 2048px)** (Input scaling); menus clamp to the node viewport and scroll natively with the mouse wheel.
-- **Frame rate:** new `frame_rate` FLOAT input (0.1–240, default 24) sets the output FPS and is emitted as a `frame_rate` output for downstream nodes to read; the legacy `external_prompt` input was dropped in favour of `external_prompt_overwrite`.
-- **Crop preview:** a ▶ Play crop button plays only the current crop range, and the preview range itself is draggable for quick scrubbing.
-- **Paste-replace:** pasting (Ctrl+V) onto a selected media tile replaces that tile in place, preserving its slot position instead of appending to the end.
-- **Category rename:** the Director and Guide nodes now register under the **DaSiWa/MiniMax H3** ComfyUI category.
-- **Companion nodes:** the MiniMax H3 family gains **MiniMax H3 Cache** (approximate block-stack residual cache) and **Patch Comfy Kitchen Attention** (INT8 attention model patch) — see the README and [minimax_h3_cache.md](minimax_h3_cache.md).
-- **non_diegetic_music default:** the field starts empty in all modes; `N/A` is applied only at prompt-assembly time when the field is left blank.
-- **Resolution panel:** new Aspect / Resolution / Input scaling selectors under the mode controls (all default to **Auto**). Auto aspect follows the first active visual reference (4:3 fallback with no media); Auto resolution sets a 768 px short side. Fixed aspect ratios, DaSiWa MP and fixed-resolution presets, and CUSTOM values all snap to H3's 32-px transformer-patch grid. H3's VAE has 16-px latent cells, but its transformer groups them in 2×2 patches; a 16-px-only edge can therefore fail at sampling. Input scaling (Off / Auto / Target / Fit / Fill and crop / Fit and pad / Long side with divisible crop) preprocesses visual references through the included DaSiWa Torch Resize before they reach H3 — Auto never upscales sources at or below a 2048 px short edge.
-- **External overwrite inputs:** optional `external_prompt_overwrite` (STRING) replaces the assembled builder output when connected and non-empty. Connect both `external_width_overwrite` and `external_height_overwrite` (INT) to replace the Director canvas; they accept arbitrary positive values and their alignment is the user's responsibility. An active complete dimension pair disables the Director Aspect/Resolution/Input Scaling controls and passes visual media through unchanged.
-- **REF2VA prompt builder redesigned:** simplified to six free-text fields (subject_definitions, summary, retention_analysis, detailed_description, overall_soundscape, non_diegetic_music). Headers are added automatically when the prompt is sent upstream. Legacy v1 structured-builder data is merged backward-compatibly into these fields.
-- **Insert [Shot N] button:** opens a small dialog asking for a shot number, then inserts `[Shot N] ` at the current cursor position in the appropriate text area — no more manual typing.
-- **Prefill Labels & Summary button (REF2VA):** scans your inserted media and generates `<Picture N>`, `<Video N>`, and `<Audio N>` label lines plus a task-prefixed summary line so you can focus on editing instead of boilerplate.
-- **Preview Prompt button:** opens a popup showing the exact prompt that will be sent to MiniMax H3 (including all section headers, alignment lines, and assembled fields). Includes a copy-to-clipboard button so you can verify or reuse the result offline.
-- **Video thumbnail previews:** every uploaded video now extracts its first frame and displays it as a background behind the clip tile, replacing the generic icon. Makes it easy to tell references apart without opening each one.
-- **Cleaner toolbar:** consolidated into a single horizontal row with mode buttons on the left and Clear/Remove/? controls on the right; removed redundant bubble elements and pulsing glows for a quieter interface.
-- **Dark-blue audio lane accent:** distinguishes the audio lane visually from the Image/Video lane and the green "+ empty-slot" indicators.
-
-### Earlier additions
-
-- **Embedded video audio extraction:** videos can now supply their own audio reference. Select A or V+A on a video clip to decode its embedded audio track with the same trim range used for frames.
-- **Per-video stream switch (V / A / V+A):** compact controls on each video tile let you treat it as Video only, Audio only, or Video+embedded-audio without adding separate audio slots.
-- **Trim support for standalone audio:** audio clips now show a waveform preview and draggable left/right crop markers, behaving identically to video trimming.
-- **Attached soundtrack trim alignment:** external soundtracks linked to a video share its trim window automatically.
-- **Mode-switch safety:** toggling FL2VA ↔ REF2VA preserves incompatible references instead of deleting them; they reappear when you switch back.
-- **Hardened video duration detection:** fallback to container-level duration when stream metadata is incomplete.
-
-### Bug fixes
-
-- **Legacy Director prompt preservation:** pre-builder Director workflows stored their editable prompt in the old `prompt` widget or the timeline JSON, before `builder_state` existed. On load, such a prompt is now detected and migrated into a lossless Simple-prompt builder state instead of being silently dropped, so old videos drop into ComfyUI with their prompt intact. Existing builder content always wins, so current workflows load idempotently.
-- **Serialized standard prompt:** `emit()` now writes the resolved prompt back to the `prompt` widget (and fires its callback) on every state change, so the standard ComfyUI prompt widget stays in sync with the assembled builder output and round-trips through `widgets_values` on save/load.
-- **Legacy widget order preserved (`frame_rate` moved to the end):** the `frame_rate` input inserted at widget position 5 in a recent change shifted every pre-`frame_rate` save one slot — old videos loaded with an empty prompt and crashed the queue (`float('match')`). `frame_rate` is now appended **last** in the required input list so the eight legacy widgets keep their original positional order; `build_guide` additionally coerces a non-numeric `frame_rate` (e.g. the stale 9th value from an old save) to the 24.0 default instead of raising.
-- **WAV `.wave` extension + RIFF duration fallback:** `.wave` is now accepted as an audio extension alongside `.wav`, and when the container/stream carries no usable duration the loader falls back to parsing the RIFF data-chunk size so a clip still reports a real length instead of failing or mis-sizing.
-- **Ctrl+Enter run shortcut preserved:** typing in builder text areas no longer swallows the ComfyUI Ctrl+Enter "queue prompt" shortcut, and timeline wheel events are forwarded to the canvas so the graph still scrolls while hovering the node.
-- **Crop-playback end guard:** removed the pre-seek pause that was clearing the crop-range end guard, so ▶ Play crop stays clamped to the selected range.
-- **Packed stereo audio duration (WAV/PCM):** PyAV returns planar formats (MP3/AAC/OGG) as `(channels, samples)` but packed formats (s16 PCM WAV, flt, s32) as one interleaved row. `load_audio()` read the shape as always `(channels, samples)`, so a stereo WAV measured twice its real length — a 10 s reference was rejected as "20 s", and under 7.5 s it reached the model at double speed with every crop offset on the wrong sample. New `decode_audio_frame()` derives channel count from the frame, de-interleaves packed frames, and normalizes integer PCM to float; both the standalone-audio and embedded-video-audio loaders share it.
-- **Integer PCM scaling by magnitude:** signed PCM was divided by `np.iinfo(dtype).max`, leaving a full-scale `-32768` at `-1.00003` (just outside the unit range). A single full-scale sample then tripped a legacy `abs().max() > 1` guard in `load_embedded_video_audio()`, which divided the whole soundtrack by 32768 — a ~90 dB attenuation. Signed formats are now scaled by `-iinfo(dtype).min` and unsigned 8-bit (silence at 128) is centered on its midpoint; the legacy guard is dropped because `decode_audio_frame()` now guarantees the unit range.
-- **KeyError `'imd'` on every REF2VA run (PR #15):** REF2VA prompts no longer hit a missing `imd` key during prompt assembly.
-- Non-string values in prompt-builder fields no longer crash with `.strip()` TypeError.
-- Textarea `onChange` callbacks now receive the string value, not the raw Event object.
-- Missing `p2_shot`/`last_shot` builder keys guarded against KeyError outside FL2VA/L2VA modes.
-- Trim sliders only respond when clicking directly on crop markers, preventing accidental drags on the track background.
-- Images can now be dragged out of locked L2VA slot positions instead of being stuck forever.
-- Slot-capacity checks corrected so images are accepted in all valid endpoint modes.
-- Center drag handles restored on prompt-field resize bars.
+The Director's full change history now lives in the collection-wide [News & Changelog](news_and_changelog.md#minimax-h3-director-v1).
 
 ## Quick overview
 
