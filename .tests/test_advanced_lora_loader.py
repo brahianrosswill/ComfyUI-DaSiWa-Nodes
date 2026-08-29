@@ -175,6 +175,53 @@ def test_basic_mode_passes_lora_metadata_to_core_loader(loader_module, tmp_path,
     assert calls == [(weights, 1.0, 1.0, metadata)]
 
 
+def test_schema_default_is_cache_off(loader_module):
+    controls = loader_module.DaSiWa_AdvancedLoRALoader.INPUT_TYPES()["required"]
+    assert controls["use_cache"][0] == "BOOLEAN"
+    assert controls["use_cache"][1]["default"] is False
+
+
+def test_cache_off_by_default_reads_every_slot(loader_module, tmp_path, monkeypatch):
+    lora_path = tmp_path / "big.safetensors"
+    lora_path.touch()
+    weights = {"diffusion_model.final_layer.video_out.set_weight": object()}
+    reader_calls = {"n": 0}
+
+    def fake_read(*_a, **_k):
+        reader_calls["n"] += 1
+        return (weights, None)
+
+    loader_module.comfy.utils.load_torch_file = fake_read
+    monkeypatch.setattr(loader_module, "_load_lora", lambda *a, **k: (a[0], a[1]))
+    loader_module._LORA_FILE_CACHE.clear()
+
+    # use_cache defaults to False -> the LRU cache is never used
+    loader_module._apply_slot("model", "clip", str(lora_path), 1.0, 1.0, 1.0, "Basic")
+    loader_module._apply_slot("model", "clip", str(lora_path), 1.0, 1.0, 1.0, "Basic")
+
+    assert reader_calls["n"] == 2   # no cache when off (existing behavior)
+
+
+def test_cache_on_reads_once_per_unique_path(loader_module, tmp_path, monkeypatch):
+    lora_path = tmp_path / "big.safetensors"
+    lora_path.touch()
+    weights = {"diffusion_model.final_layer.video_out.set_weight": object()}
+    reader_calls = {"n": 0}
+
+    def fake_read(*_a, **_k):
+        reader_calls["n"] += 1
+        return (weights, None)
+
+    loader_module.comfy.utils.load_torch_file = fake_read
+    monkeypatch.setattr(loader_module, "_load_lora", lambda *a, **k: (a[0], a[1]))
+    loader_module._LORA_FILE_CACHE.clear()
+
+    loader_module._apply_slot("model", "clip", str(lora_path), 1.0, 1.0, 1.0, "Basic", True)
+    loader_module._apply_slot("model", "clip", str(lora_path), 1.0, 1.0, 1.0, "Basic", True)
+
+    assert reader_calls["n"] == 1   # second slot reused the cached read
+
+
 def test_frontend_has_mode_selector_and_disables_unavailable_audio_controls():
     source = (Path(__file__).parents[1] / "js" / "advanced_lora_loader_ui.js").read_text(encoding="utf-8")
 

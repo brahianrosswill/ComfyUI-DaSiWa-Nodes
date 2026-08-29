@@ -12,6 +12,7 @@ Effective audio strength = lora_str * as
 
 import os
 import json
+import collections
 import folder_paths
 import comfy.utils
 import comfy.lora
@@ -30,6 +31,27 @@ NUM_SLOTS = 10
 MODEL_TYPE_BASIC = "Basic"
 MODEL_TYPE_LTX23 = "LTX-2.3"
 MODEL_TYPES = (MODEL_TYPE_BASIC, MODEL_TYPE_LTX23)
+
+# Opt-in per-path LoRA file cache (Core parity). Only populated when a node
+# activates use_cache; keyed by absolute path, LRU-bounded.
+_LORA_FILE_CACHE = collections.OrderedDict()
+_LORA_FILE_CACHE_MAX = 4   # ~4 x 1.6 GB worst case on a 61 GB host
+
+
+def _read_lora_file(lora_path):
+    """Read (and cache) a LoRA file -> (weights, metadata), keyed by path (LRU)."""
+    if lora_path in _LORA_FILE_CACHE:
+        _LORA_FILE_CACHE.move_to_end(lora_path)
+        return _LORA_FILE_CACHE[lora_path]
+    try:
+        weights, lora_metadata = comfy.utils.load_torch_file(lora_path, safe_load=True, return_metadata=True)
+    except TypeError:
+        weights, lora_metadata = comfy.utils.load_torch_file(lora_path, safe_load=True), None
+    _LORA_FILE_CACHE[lora_path] = (weights, lora_metadata)
+    _LORA_FILE_CACHE.move_to_end(lora_path)
+    while len(_LORA_FILE_CACHE) > _LORA_FILE_CACHE_MAX:
+        _LORA_FILE_CACHE.popitem(last=False)
+    return weights, lora_metadata
 
 
 def _is_audio_key(k):
@@ -50,17 +72,20 @@ def _apply_full_lora(model, clip, weights, strength, lora_metadata=None):
     return model, clip
 
 
-def _apply_slot(model, clip, lora_name, lora_str, vs, as_, model_type):
+def _apply_slot(model, clip, lora_name, lora_str, vs, as_, model_type, use_cache=False):
     """Apply a single LoRA slot for the selected model architecture."""
     lora_path = folder_paths.get_full_path("loras", lora_name)
     if not lora_path or not os.path.isfile(lora_path):
         log_dasiwa("Advanced LoRA Loader", f"LoRA not found: {lora_name}")
         return model, clip
 
-    try:
-        weights, lora_metadata = comfy.utils.load_torch_file(lora_path, safe_load=True, return_metadata=True)
-    except TypeError:
-        weights, lora_metadata = comfy.utils.load_torch_file(lora_path, safe_load=True), None
+    if use_cache:
+        weights, lora_metadata = _read_lora_file(lora_path)
+    else:
+        try:
+            weights, lora_metadata = comfy.utils.load_torch_file(lora_path, safe_load=True, return_metadata=True)
+        except TypeError:
+            weights, lora_metadata = comfy.utils.load_torch_file(lora_path, safe_load=True), None
     v_final = lora_str * vs
     model_type = _normalize_model_type(model_type)
     if model_type != MODEL_TYPE_LTX23:
@@ -133,6 +158,10 @@ class DaSiWa_AdvancedLoRALoader:
                     "default": "Basic",
                     "description": "Basic loads all LoRA tensors universally; LTX-2.3 enables video/audio separation.",
                 }),
+                "use_cache": ("BOOLEAN", {
+                    "default": False,
+                    "description": "Activate caching of the loaded LoRA file + metadata. Off by default; when on, each unique LoRA file is read once instead of once per slot.",
+                }),
             },
             "hidden": {"available_loras": (lora_list, {"description": "Internal list of LoRA files used by the custom slot picker."})}
         }
@@ -141,7 +170,7 @@ class DaSiWa_AdvancedLoRALoader:
     FUNCTION = "apply_stack"
     CATEGORY = "DaSiWa/loaders/lora"
 
-    def apply_stack(self, model, clip, stack_data="[]", model_type=MODEL_TYPE_BASIC, available_loras=None):
+    def apply_stack(self, model, clip, stack_data="[]", model_type=MODEL_TYPE_BASIC, use_cache=False, available_loras=None):
         """Parse and apply the LoRA stack"""
         m, c = model, clip
         try:
@@ -156,6 +185,6 @@ class DaSiWa_AdvancedLoRALoader:
             lora_str = float(row.get("str", 1.0))
             vs = float(row.get("vs", 1.0))
             as_ = float(row.get("as", 1.0))
-            m, c = _apply_slot(m, c, row["lora"], lora_str, vs, as_, model_type)
+            m, c = _apply_slot(m, c, row["lora"], lora_str, vs, as_, model_type, use_cache)
         
         return (m, c)
