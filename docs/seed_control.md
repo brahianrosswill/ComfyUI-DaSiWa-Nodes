@@ -95,3 +95,4 @@ the node.
   so API clients (no DOM) still get a fresh seed every queue.
 - Out-of-range seeds (below 0 or above `0xFFFFFFFFFFFFFFFF`) raise a
   `ValueError` in `execute`.
+- The before-queue roll is installed by wrapping the app's queue entry point (`app.queuePrompt`), because the Vue-based frontend no longer dispatches the legacy extension-level queue hook. One roll per queue action; Fixed mode and linked external seeds are untouched.

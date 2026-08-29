@@ -6,6 +6,7 @@ This changelog covers the last two months: **2026-06-29 → 2026-08-29**. The fi
 
 ## News
 
+- **Seed Control queue roll (08-29):** Random mode rolls a fresh seed on every queue again under the new Vue frontend — the legacy extension-level queue hook stopped dispatching there, so the roll now runs by wrapping the app's queue entry point (Fixed mode and external-seed links unchanged).
 - **LoRA info button (08-29):** the Advanced LoRA Loader rows now have an ⓘ glyph at the right edge. It opens a panel with the LoRA's Civitai link (looked up by the file's SHA-256, cached in `lorainfo/`), trigger/trained words from the safetensors header and Civitai (click-select, copy), and preview images (Civitai + a local sidecar `*.png` next to the LoRA if present).
 - **Advanced LoRA Loader: universal rename + PDD/ACC support + opt-in cache (08-29):** the LTX-2-only loader is renamed to a universal **Advanced LoRA Loader** (serialized node ID unchanged), forwards PDD/ACC LoRA metadata to Core so PDD/ACC head banks activate, and gains an **opt-in** `use_cache` button (default off) that caches each unique LoRA file across slots.
 - **H3 Cache compatibility & quality parity (08-29):** PDD LoRA head bank support (ComfyUI 0.34+) and per-token denoise-mask parity with Core.
