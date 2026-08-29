@@ -72,3 +72,87 @@ def trained_words_from_metadata(md: dict) -> list:
                 except (TypeError, ValueError):
                     pass
     return list(words.values())
+
+
+def merge_civitai(info: dict, civ) -> bool:
+    """Merge a Civitai model-versions API response into `info`. Returns True if changed.
+
+    `civ` may be None (model not found on Civitai) — then nothing is touched.
+    """
+    if not civ:
+        return False
+    changed = False
+    model = civ.get("model") if isinstance(civ.get("model"), dict) else {}
+    if "name" not in info and civ.get("name"):
+        model_name = model.get("name", "")
+        version_name = civ["name"]
+        info["name"] = f"{model_name} - {version_name}" if model_name else version_name
+        changed = True
+    for key in ("type", "baseModel"):
+        value = civ.get(key) or model.get(key)
+        if key not in info and value:
+            info[key] = value
+            changed = True
+    word_map = {w["word"]: w for w in info.get("trainedWords", []) if isinstance(w, dict)}
+    merged = False
+    for word in list(civ.get("triggerWords", [])) + list(civ.get("trainedWords", [])):
+        if not isinstance(word, str) or not word:
+            continue
+        entry = word_map.setdefault(word, {"word": word})
+        entry["civitai"] = True
+        merged = True
+    if merged:
+        for w in word_map.values():
+            w.setdefault("count", 0)
+        info["trainedWords"] = sorted(word_map.values(), key=lambda w: -w["count"])
+        changed = True
+    if civ.get("modelId") or civ.get("id"):
+        link = f"https://civitai.com/models/{civ.get('modelId', '')}"
+        if civ.get("id"):
+            link += f"?modelVersionId={civ['id']}"
+        info["links"] = info.get("links", []) + [link]
+        changed = True
+    if civ.get("images"):
+        existing_urls = {im.get("url") for im in info.get("images", []) if isinstance(im, dict)}
+        for img in civ["images"]:
+            if not isinstance(img, dict):
+                continue
+            url = img.get("url")
+            if not url or url in existing_urls:
+                continue
+            meta = img.get("meta") or {}
+            info.setdefault("images", []).append({
+                "url": url,
+                "type": img.get("type"),
+                "width": img.get("width"),
+                "height": img.get("height"),
+                "seed": meta.get("seed"),
+                "positive": meta.get("prompt"),
+                "negative": meta.get("negativePrompt"),
+                "steps": meta.get("steps"),
+                "sampler": meta.get("sampler"),
+                "cfg": meta.get("cfgScale"),
+                "model": meta.get("Model"),
+            })
+            changed = True
+    return changed
+
+
+def cache_read(sha: str):
+    """Cached info for a file sha256, or None."""
+    path = os.path.join(CACHE_DIR, f"{sha}.json")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def cache_write(sha: str, data: dict):
+    """Persist info next to the nodepack. Never raises (cache is convenience)."""
+    try:
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        with open(os.path.join(CACHE_DIR, f"{sha}.json"), "w", encoding="utf-8") as f:
+            json.dump(data, f)
+    except Exception:
+        pass
