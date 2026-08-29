@@ -6,6 +6,7 @@ This changelog covers the last two months: **2026-06-29 → 2026-08-29**. The fi
 
 ## News
 
+- **LoRA info button (08-29):** the Advanced LoRA Loader rows now have an ⓘ glyph at the right edge. It opens a panel with the LoRA's Civitai link (looked up by the file's SHA-256, cached in `lorainfo/`), trigger/trained words from the safetensors header and Civitai (click-select, copy), and preview images (Civitai + a local sidecar `*.png` next to the LoRA if present).
 - **Advanced LoRA Loader: universal rename + PDD/ACC support + opt-in cache (08-29):** the LTX-2-only loader is renamed to a universal **Advanced LoRA Loader** (serialized node ID unchanged), forwards PDD/ACC LoRA metadata to Core so PDD/ACC head banks activate, and gains an **opt-in** `use_cache` button (default off) that caches each unique LoRA file across slots.
 - **H3 Cache compatibility & quality parity (08-29):** PDD LoRA head bank support (ComfyUI 0.34+) and per-token denoise-mask parity with Core.
 - **Image Inpaint mode for the Director (08-28):** a 5-frame image-to-video pass through the native `MiniMaxH3ImageToVideo` node; the `inpaint_requested` output lets downstream sampling branch on mode.
@@ -22,6 +23,7 @@ Quick reference for the version bumps inside this window, newest first:
 
 | Version | Date | Headline |
 |---|---|---|
+| 0.4.28 | 08-29 | LoRA info button in the Advanced LoRA Loader (Civitai link, trigger words, images) |
 | 0.4.27 | 08-29 | Advanced LoRA Loader universal rename; PDD/ACC metadata passthrough; opt-in cache button |
 | 0.4.26 | 08-29 | H3 Cache PDD head-bank + per-token mask support |
 | 0.4.25 | 08-28 | Director v1 Image Inpaint mode; `inpaint_requested` output switch |

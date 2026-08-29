@@ -2,7 +2,7 @@
 
 **Category:** `loaders/lora`  
 **Class name:** `DaSiWa_AdvancedLoRALoader` (serialized node ID: `DaSiWa_LTX2LoraLoader`, unchanged for workflow compatibility)  
-**File:** `nodes/nodes_advanced_lora_loader.py` · `js/advanced_lora_loader_ui.js`
+**File:** `nodes/nodes_advanced_lora_loader.py` · `js/advanced_lora_loader_ui.js` · `nodes/lora_info.py` (info panel backend)
 
 ---
 
@@ -72,6 +72,7 @@ Each row represents one LoRA slot. Columns are:
 | **V×** | Video multiplier. Left/right arrows adjust by ±0.05, middle click opens an inline editor. Range: 0.0 to 2.0. |
 | **A×** | Audio multiplier. Same controls as V×. Range: 0.0 to 2.0. |
 | **V:N A:N** | Key count indicator (right side). Shows how many video and audio keys this LoRA contains. Updates automatically. |
+| **ⓘ** | Info button (row right edge, dimmed for empty slots). Opens the LoRA info panel: Civitai link (looked up by the file's SHA-256), trigger/trained words, and preview images. |
 
 ### Buttons
 
@@ -89,6 +90,18 @@ When you load a LoRA, the node scans the file and shows:
 - **A:N** — Number of audio-branch keys in the LoRA
 
 If **A:0**, the LoRA was trained on silent data and audio mode won't have any effect. This helps you identify which LoRAs are worth using in audio-multiplier mode before wasting a generation.
+
+---
+
+## LoRA Info Panel (ⓘ)
+
+Click the ⓘ glyph at the right edge of a slot's row (v0.4.28) to open an info panel for that LoRA. It shows:
+
+- **Civitai link** — the file's SHA-256 is looked up on Civitai's `model-versions/by-hash` API. The result is cached in `lorainfo/<sha256>.json` next to the nodepack, so subsequent opens are instant (the **Refresh** button forces a re-fetch).
+- **Trigger / trained words** — collected from the LoRA's safetensors `ss_tag_frequency` metadata and from Civitai when available. Click words to select them, then **Copy all** / **Copy selected** to put them on the clipboard for your prompt.
+- **Images** — Civitai preview images (first six), plus a local sidecar image (`.png` / `.jpg` / `.jpeg` / `.webp` with the same basename as the LoRA) if one sits next to the file.
+
+If the LoRA is not on Civitai, the panel says so and still shows the metadata-based words and any local image. No internet access is required for the metadata/local-image parts; only the Civitai lookup touches the network.
 
 ---
 
@@ -134,6 +147,7 @@ STR: −0.5, V×: 1.0, A×: 0.0   (Reduce specific video features)
 - **Strength multiplication:** Effective strengths are computed as `STR × multiplier`, allowing negative STR to invert effects.
 - **Safe fallback:** If a LoRA file is missing or corrupted, the node logs a warning and continues with the remaining LoRAs.
 - **Renamed (v0.4.27):** the loader was renamed from the LTX-2-only `DaSiWa LTX-2 Master Loader` to the universal **Advanced LoRA Loader**. The *serialized* node ID `DaSiWa_LTX2LoraLoader` is unchanged, so saved workflows load untouched; only the module, class, JS, docs, and display name changed internally.
+- **LoRA info button (v0.4.28):** the per-row ⓘ glyph opens a panel served by two new GET routes, `/dasiwa/ltx2/lorainfo` (sha256 of the file + safetensors header metadata + cached Civitai by-hash lookup) and `/dasiwa/ltx2/loraimg` (a sidecar image next to the LoRA file). Both live in `nodes/lora_info.py`; lookup results are cached as `lorainfo/<sha256>.json` next to the nodepack.
 - **PDD/ACC metadata (v0.4.27):** the LoRA file is now read with `return_metadata=True` and the metadata is forwarded to Core's `load_lora_for_models`, matching the native `LoraLoader`. This is what activates PDD / ACC LoRA head banks. Older ComfyUI builds that don't accept the metadata are still supported via a `TypeError` fallback.
 - **Opt-in cache (v0.4.27):** when **use_cache** is on, each absolute LoRA path is kept in a bounded LRU cache (max 4 entries), so a LoRA reused across slots is read once. **Off by default** — when off, the file is read per slot (current behaviour, no change).
 - **PDD head-bank guard (warn-only):** if a loaded LoRA carries PDD metadata (`pdd_num_steps`/`pdd_block_size`) **and** its `final_layer` head-bank width differs from the target model's live `final_layer.video_out` width, the loader **prints a console warning** but leaves every key in place. The core shape crash at `comfy/lora.py` (`The size of tensor a … must match …`) is intentional protection against applying a PDD Acc LoRA to a single-head H3 model — the guard does **not** strip or circumvent it. The warning tells you the head bank won't apply and how to fix it (use a PDD model). Only on positive evidence (both widths readable and different) does the guard warn; a genuine PDD model whose width matches is never touched.
