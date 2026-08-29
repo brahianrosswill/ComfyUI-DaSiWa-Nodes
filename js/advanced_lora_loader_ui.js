@@ -595,8 +595,8 @@ app.registerExtension({
         vX: 635 * s, vW: 60 * s,
         aX: 702 * s, aW: 60 * s,
         rX: 770 * s, rW: W - 770 * s - 8,
-        iX: 962 * s, iW: 14 * s,
-        tX: 976 * s, tW: 14 * s,
+        iX: 954 * s, iW: 17 * s,
+        tX: 975 * s, tW: 17 * s,
       };
 
       for (let i = 0; i < data.length; i++) {
@@ -651,8 +651,8 @@ app.registerExtension({
         vX: 635 * s, vW: 60 * s,
         aX: 702 * s, aW: 60 * s,
         rX: 770 * s, rW: W - 770 * s - 8,
-        iX: 962 * s, iW: 14 * s,
-        tX: 976 * s, tW: 14 * s,
+        iX: 954 * s, iW: 17 * s,
+        tX: 975 * s, tW: 17 * s,
       };
 
       const modeW = 150, modeX = (W - modeW) / 2;
@@ -818,16 +818,16 @@ app.registerExtension({
         {
           const infoCol = row.lora !== "None" ? t.strColor + "AA" : t.nameEmpty;
           const cx = C.iX + C.iW / 2, cy = ry + ROW_H / 2;
-          const r = 5.5 * s;
+          const r = 7 * s;
           ctx.strokeStyle = infoCol;
-          ctx.lineWidth = 1;
+          ctx.lineWidth = 1.2;
           ctx.beginPath();
           ctx.arc(cx, cy, r, 0, Math.PI * 2);
           ctx.stroke();
           ctx.fillStyle = infoCol;
-          ctx.font = "bold " + Math.max(6, Math.round(8 * s)) + "px 'Courier New',monospace";
+          ctx.font = "bold " + Math.max(8, Math.round(10 * s)) + "px 'Courier New',monospace";
           ctx.textAlign = "center";
-          ctx.fillText("i", cx, cy + 3 * s);
+          ctx.fillText("i", cx, cy + 4 * s);
           ctx.textAlign = "left";
         }
 
@@ -837,24 +837,24 @@ app.registerExtension({
           const trCol = row.lora !== "None" ? t.offColor + "CC" : t.nameEmpty;
           const cx = C.tX + C.tW / 2, cy = ry + ROW_H / 2;
           ctx.strokeStyle = trCol;
-          ctx.lineWidth = 1;
+          ctx.lineWidth = 1.2;
           ctx.beginPath();
           // lid + handle
-          ctx.moveTo(cx - 4 * s, cy - 3.5 * s);
-          ctx.lineTo(cx + 4 * s, cy - 3.5 * s);
-          ctx.moveTo(cx, cy - 4.5 * s);
-          ctx.lineTo(cx, cy - 3.5 * s);
+          ctx.moveTo(cx - 5.2 * s, cy - 4.5 * s);
+          ctx.lineTo(cx + 5.2 * s, cy - 4.5 * s);
+          ctx.moveTo(cx, cy - 5.8 * s);
+          ctx.lineTo(cx, cy - 4.5 * s);
           // body
-          ctx.moveTo(cx - 3 * s, cy - 2 * s);
-          ctx.lineTo(cx + 3 * s, cy - 2 * s);
-          ctx.lineTo(cx + 2.2 * s, cy + 4 * s);
-          ctx.lineTo(cx - 2.2 * s, cy + 4 * s);
+          ctx.moveTo(cx - 3.9 * s, cy - 2.6 * s);
+          ctx.lineTo(cx + 3.9 * s, cy - 2.6 * s);
+          ctx.lineTo(cx + 2.9 * s, cy + 5.2 * s);
+          ctx.lineTo(cx - 2.9 * s, cy + 5.2 * s);
           ctx.closePath();
           // ribs
-          ctx.moveTo(cx - 1 * s, cy - 1 * s);
-          ctx.lineTo(cx - 0.7 * s, cy + 3 * s);
-          ctx.moveTo(cx + 1 * s, cy - 1 * s);
-          ctx.lineTo(cx + 0.7 * s, cy + 3 * s);
+          ctx.moveTo(cx - 1.3 * s, cy - 1.4 * s);
+          ctx.lineTo(cx - 0.9 * s, cy + 3.4 * s);
+          ctx.moveTo(cx + 1.3 * s, cy - 1.4 * s);
+          ctx.lineTo(cx + 0.9 * s, cy + 3.4 * s);
           ctx.stroke();
         }
       }
@@ -943,8 +943,8 @@ app.registerExtension({
           stX: 548 * s, stW: 80 * s,
           vX: 635 * s, vW: 60 * s,
           aX: 702 * s, aW: 60 * s,
-          iX: 962 * s, iW: 14 * s,
-          tX: 976 * s, tW: 14 * s,
+          iX: 954 * s, iW: 17 * s,
+          tX: 975 * s, tW: 17 * s,
       };
 
       for (let i = 0; i < data.length; i++) {
