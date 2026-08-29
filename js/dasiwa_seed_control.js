@@ -227,9 +227,41 @@ function dasiwaSeedControlInstall(node) {
   dasiwaSeedControlRender();
 }
 
+// ── Queue-time seed preparation ────────────────────────────────────────
+// The Vue-based ComfyUI frontend no longer dispatches the legacy extension
+// queue hook, so the Random-mode roll is triggered by wrapping the app's
+// queue entry point instead. One roll per queue action: a batch-queued
+// run of N outputs rolls once, matching the documented 'rolls a fresh seed
+// on every queue' semantics. Fixed mode and linked external seeds are
+// left alone — __dasiwaSeedPrepareSeed early-returns for both.
+
+function dasiwaSeedControlNodesInGraphTree(graph, visited = new Set()) {
+  if (!graph || visited.has(graph)) return [];
+  visited.add(graph);
+  const nodes = graph._nodes ?? graph.nodes ?? [];
+  return nodes.flatMap(node => [node, ...dasiwaSeedControlNodesInGraphTree(node.subgraph, visited)]);
+}
+
+function dasiwaSeedControlPrepareAll() {
+  for (const node of dasiwaSeedControlNodesInGraphTree(app.graph)) {
+    if (DASIWASEED_NODE_TYPES.has(node.comfyClass)) node.__dasiwaSeedPrepareSeed?.();
+  }
+}
+
+function dasiwaSeedControlPatchQueuePrompt() {
+  if (app.__dasiwaSeedQueuePatched || typeof app?.queuePrompt !== "function") return;
+  const originalQueuePrompt = app.queuePrompt;
+  app.queuePrompt = function (...args) {
+    dasiwaSeedControlPrepareAll();
+    return originalQueuePrompt.apply(this, args);
+  };
+  app.__dasiwaSeedQueuePatched = true;
+}
+
+dasiwaSeedControlPatchQueuePrompt();
+
 app.registerExtension({
   name: "DaSiWa.SeedControl",
   nodeCreated(node) { if (DASIWASEED_NODE_TYPES.has(node.comfyClass)) dasiwaSeedControlInstall(node); },
   loadedGraphNode(node) { if (DASIWASEED_NODE_TYPES.has(node.comfyClass)) { dasiwaSeedControlInstall(node); node.__dasiwaSeedRestorePersistedState?.(); } },
-  beforeQueued() { for (const node of app.graph?._nodes || []) if (DASIWASEED_NODE_TYPES.has(node.comfyClass)) node.__dasiwaSeedPrepareSeed?.(); },
 });
