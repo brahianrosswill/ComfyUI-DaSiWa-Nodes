@@ -6,6 +6,7 @@ This changelog covers the last two months: **2026-06-29 → 2026-08-29**. The fi
 
 ## News
 
+- **Advanced LoRA Loader: universal rename + PDD/ACC support + opt-in cache (08-29):** the LTX-2-only loader is renamed to a universal **Advanced LoRA Loader** (serialized node ID unchanged), forwards PDD/ACC LoRA metadata to Core so PDD/ACC head banks activate, and gains an **opt-in** `use_cache` button (default off) that caches each unique LoRA file across slots.
 - **H3 Cache compatibility & quality parity (08-29):** PDD LoRA head bank support (ComfyUI 0.34+) and per-token denoise-mask parity with Core.
 - **Image Inpaint mode for the Director (08-28):** a 5-frame image-to-video pass through the native `MiniMaxH3ImageToVideo` node; the `inpaint_requested` output lets downstream sampling branch on mode.
 - **Director 2.0 frozen (08-28):** the experimental v2 fork is removed from the nodepack and preserved under `frozen/`; v1 plus Image Inpaint is the supported path.
@@ -21,6 +22,7 @@ Quick reference for the version bumps inside this window, newest first:
 
 | Version | Date | Headline |
 |---|---|---|
+| 0.4.27 | 08-29 | Advanced LoRA Loader universal rename; PDD/ACC metadata passthrough; opt-in cache button |
 | 0.4.26 | 08-29 | H3 Cache PDD head-bank + per-token mask support |
 | 0.4.25 | 08-28 | Director v1 Image Inpaint mode; `inpaint_requested` output switch |
 | 0.4.24 | 08-28 | Director 2.0 freeze (v2 archived to `frozen/`) |
@@ -68,6 +70,7 @@ Quick reference for the version bumps inside this window, newest first:
 
 ### Advanced LoRA Loader (LTX-2.3)
 
+- **08-29:** **universal rename + PDD/ACC support + opt-in cache:** the LTX-2-only `DaSiWa LTX-2 Master Loader` is renamed to the **Advanced LoRA Loader** — module/class/JS/docs/display name changed internally, but the *serialized* node ID `DaSiWa_LTX2LoraLoader` and display name stay stable for saved workflows (display now drops the "DaSiWa" prefix). The file is read with `return_metadata=True` and the PDD/ACC metadata is forwarded to Core's `load_lora_for_models`, so PDD / ACC LoRA head banks activate (older builds fall back via `TypeError`). A new **⚡ CACHE** button in the control strip enables an opt-in per-path LRU cache (max 4 entries, **off by default**), so a LoRA reused across slots is read once.
 - **08-25:** **inline value editor:** the STR, VIS, and AUDIO pills open an in-canvas editor instead of a `prompt()` dialog; the editor is pinned to its pill and tracks pan and zoom; documented.
 - **08-15:** STR / VIS / A value editors no longer bounce off 0 (nullish fallback).
 - **07-11:** LoRA list refreshes dynamically.

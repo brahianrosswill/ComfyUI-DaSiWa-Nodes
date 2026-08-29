@@ -44,6 +44,8 @@ With the Lora Loader, you can now:
 | `model` | MODEL | The LTX-2.3 model to apply LoRAs to. |
 | `clip` | CLIP | The CLIP model (passed through unchanged). |
 | `stack_data` | STRING | JSON-encoded LoRA stack configuration (auto-managed by UI). |
+| `model_type` | COMBO (`Basic` / `LTX-2.3`) | `Basic` loads every tensor once; `LTX-2.3` separates video/audio branches. |
+| `use_cache` | BOOLEAN | Opt-in cache for the loaded LoRA file + metadata. **Off by default**; when on, each unique file is read once instead of once per slot. |
 
 ---
 
@@ -73,6 +75,7 @@ Each row represents one LoRA slot. Columns are:
 
 ### Buttons
 
+- **⚡ CACHE / ⚡ CACHE ✓** — Toggle the opt-in LoRA file cache. **Off by default** (grey, reads the file per slot, current behaviour). When on (theme-colored, shows `✓`), each unique LoRA file is read once and reused across slots. Persists with the workflow.
 - **⬡ THEME: [NAME] ▶** — Cycle through 6 color themes (Jade, Neon, Studio, Chrome, OLED, Wood). Persists with workflow.
 - **+** — Add a new LoRA slot at the bottom.
 - **−** — Remove the last LoRA slot (only visible if more than 1 slot exists).
@@ -130,6 +133,9 @@ STR: −0.5, V×: 1.0, A×: 0.0   (Reduce specific video features)
 - **Branch separation:** The node scans each LoRA's weights, filters by key name, and applies them separately.
 - **Strength multiplication:** Effective strengths are computed as `STR × multiplier`, allowing negative STR to invert effects.
 - **Safe fallback:** If a LoRA file is missing or corrupted, the node logs a warning and continues with the remaining LoRAs.
+- **Renamed (v0.4.27):** the loader was renamed from the LTX-2-only `DaSiWa LTX-2 Master Loader` to the universal **Advanced LoRA Loader**. The *serialized* node ID `DaSiWa_LTX2LoraLoader` is unchanged, so saved workflows load untouched; only the module, class, JS, docs, and display name changed internally.
+- **PDD/ACC metadata (v0.4.27):** the LoRA file is now read with `return_metadata=True` and the metadata is forwarded to Core's `load_lora_for_models`, matching the native `LoraLoader`. This is what activates PDD / ACC LoRA head banks. Older ComfyUI builds that don't accept the metadata are still supported via a `TypeError` fallback.
+- **Opt-in cache (v0.4.27):** when **use_cache** is on, each absolute LoRA path is kept in a bounded LRU cache (max 4 entries), so a LoRA reused across slots is read once. **Off by default** — when off, the file is read per slot (current behaviour, no change).
 
 ---
 
